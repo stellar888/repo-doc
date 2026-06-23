@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -17,6 +19,28 @@ from .schemas import AgentResult
 
 app = typer.Typer(no_args_is_help=True)
 console = Console()
+log_console = Console(stderr=True)
+
+BANNER = r"""
+                 __
+  ________ ____  / /___        ____/ /___  _____
+ / ___/ _ `/ _ \/ / __ \______/ __  / __ \/ ___/
+/ /  /  __/  __/ / /_/ /_____/ /_/ / /_/ / /__
+/_/   \___/\___/_/ .___/      \__,_/\____/\___/
+                 /_/
+""".strip("\n")
+
+
+def _print_banner(command: str) -> None:
+    log_console.print(f"[cyan]{BANNER}[/cyan]")
+    log_console.print(f"[bold]repo-doc[/bold] {command}\n")
+
+
+@contextmanager
+def _step(message: str) -> Iterator[None]:
+    with log_console.status(f"[cyan]{message}[/cyan]", spinner="dots"):
+        yield
+    log_console.print(f"[green]OK[/green] {message}")
 
 
 def _run_git(args: list[str], *, repo_root: Path) -> str:
@@ -88,22 +112,24 @@ def _run_analysis(
     base: str | None,
     mock: bool,
 ) -> AgentResult:
-    diff = _load_diff(
-        diff_file=diff_file,
-        repo_root=repo_root,
-        staged=staged,
-        base=base,
-    )
+    with _step("Reading Git changes"):
+        diff = _load_diff(
+            diff_file=diff_file,
+            repo_root=repo_root,
+            staged=staged,
+            base=base,
+        )
     if not diff.strip():
-        console.print("[yellow]No Git diff found to analyse.[/yellow]")
+        log_console.print("[yellow]No Git diff found to analyse.[/yellow]")
         raise typer.Exit(code=1)
 
-    model = MockStructuredModel() if mock else OpenAIStructuredModel(settings)
-    return run_agent(
-        diff=diff,
-        settings=settings,
-        model=model,
-    )
+    with _step("Running documentation agent"):
+        model = MockStructuredModel() if mock else OpenAIStructuredModel(settings)
+        return run_agent(
+            diff=diff,
+            settings=settings,
+            model=model,
+        )
 
 
 def _print_and_write_result(result: AgentResult, output: Path | None) -> None:
@@ -168,11 +194,13 @@ def analyse(
     output: Annotated[Path | None, typer.Option(help="Optional JSON output file.")] = None,
 ) -> None:
     """Analyse Git changes and produce a bounded documentation proposal."""
-    settings, _project_config = _settings_from_inputs(
-        repo_root=repo_root,
-        config_file=config_file,
-        allowed_doc_path=allowed_doc_path,
-    )
+    _print_banner("analyse")
+    with _step("Loading configuration"):
+        settings, _project_config = _settings_from_inputs(
+            repo_root=repo_root,
+            config_file=config_file,
+            allowed_doc_path=allowed_doc_path,
+        )
     result = _run_analysis(
         settings=settings,
         diff_file=diff_file,
@@ -185,25 +213,26 @@ def analyse(
 
     if apply:
         if result.status != "ok" or result.proposal.action != "update":
-            console.print(
+            log_console.print(
                 "[yellow]Documentation changes were not applied because the result is not "
                 "a safe update proposal.[/yellow]"
             )
             raise typer.Exit(code=1)
 
-        applied_paths = apply_documentation_proposal(
-            proposal=result.proposal,
-            repository_root=repo_root.resolve(),
-            allowed_paths=settings.allowed_paths,
+        with _step("Applying documentation changes"):
+            applied_paths = apply_documentation_proposal(
+                proposal=result.proposal,
+                repository_root=repo_root.resolve(),
+                allowed_paths=settings.allowed_paths,
         )
         if not applied_paths:
-            console.print(
+            log_console.print(
                 "[yellow]No documentation files changed; proposed content already exists.[/yellow]"
             )
             return
 
         for path in applied_paths:
-            console.print(f"[green]Applied documentation update:[/green] {path}")
+            log_console.print(f"[green]Applied documentation update:[/green] {path}")
 
 
 @app.command()
@@ -252,11 +281,13 @@ def check(
     output: Annotated[Path | None, typer.Option(help="Optional JSON output file.")] = None,
 ) -> None:
     """CI-friendly documentation gate for Git changes."""
-    settings, project_config = _settings_from_inputs(
-        repo_root=repo_root,
-        config_file=config_file,
-        allowed_doc_path=allowed_doc_path,
-    )
+    _print_banner("check")
+    with _step("Loading configuration"):
+        settings, project_config = _settings_from_inputs(
+            repo_root=repo_root,
+            config_file=config_file,
+            allowed_doc_path=allowed_doc_path,
+        )
     effective_base = base or (None if diff_file or staged else project_config.base_branch)
     result = _run_analysis(
         settings=settings,
@@ -269,18 +300,18 @@ def check(
     _print_and_write_result(result, output)
 
     if result.status == "ok" and result.proposal.action == "no_change":
-        console.print("[green]No documentation update required.[/green]")
+        log_console.print("[green]No documentation update required.[/green]")
         return
 
     if result.status == "ok" and result.proposal.action == "update":
-        console.print("[red]Documentation updates are needed.[/red]")
+        log_console.print("[red]Documentation updates are needed.[/red]")
         raise typer.Exit(code=2)
 
     if result.status == "human_review":
-        console.print("[yellow]Documentation check requires human review.[/yellow]")
+        log_console.print("[yellow]Documentation check requires human review.[/yellow]")
         raise typer.Exit(code=3)
 
-    console.print("[red]Documentation check was blocked by a safety gate.[/red]")
+    log_console.print("[red]Documentation check was blocked by a safety gate.[/red]")
     raise typer.Exit(code=4)
 
 
@@ -305,11 +336,13 @@ def doctor(
     ] = None,
 ) -> None:
     """Validate local configuration without calling a model."""
-    settings, project_config = _settings_from_inputs(
-        repo_root=repo_root,
-        config_file=config_file,
-        allowed_doc_path=None,
-    )
+    _print_banner("doctor")
+    with _step("Loading configuration"):
+        settings, project_config = _settings_from_inputs(
+            repo_root=repo_root,
+            config_file=config_file,
+            allowed_doc_path=None,
+        )
     checks = {
         "python_package": "ok",
         "allowed_paths": settings.allowed_paths,
