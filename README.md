@@ -78,6 +78,19 @@ repo-doc analyse --diff-file /tmp/change.diff
 repo-doc analyse --repo-root /path/to/your/project
 ```
 
+For CI or pre-push checks, use `check` instead of `analyse`:
+
+```bash
+repo-doc check --base main
+```
+
+`check` exits with:
+
+- `0` when no documentation update is required.
+- `2` when documentation updates are needed.
+- `3` when human review is required.
+- `4` when a deterministic safety gate blocks the run.
+
 By default, `repo-doc` is review-only. To write safe documentation proposals into the allowed doc
 files, opt in explicitly:
 
@@ -98,6 +111,18 @@ repo-doc analyse \
   --allowed-doc-path guides
 ```
 
+Or commit a `repo-doc.toml` to each repository that uses the tool:
+
+```toml
+allowed_doc_paths = ["docs", "README.md", "guides"]
+base_branch = "main"
+max_diff_chars = 40000
+max_doc_chars = 12000
+openai_model = "gpt-5-mini"
+```
+
+There is a copyable starter at `repo-doc.example.toml`.
+
 The output is JSON. The important fields are:
 
 - `status`: `ok`, `human_review`, or `blocked`.
@@ -114,6 +139,39 @@ Useful settings:
 - `ALLOWED_DOC_DIRS`: comma-separated documentation paths the agent may read or propose edits for.
 - `REPOSITORY_ROOT`: root used when reading existing documentation when `--repo-root` is omitted.
 - `MAX_DIFF_CHARS` and `MAX_DOC_CHARS`: input caps before model calls.
+
+## GitHub Actions check
+
+```yaml
+name: repo-doc
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install repo-doc
+      - run: repo-doc check --base origin/main
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+Use mock mode for deterministic CI demos that do not need an API key:
+
+```bash
+repo-doc check --base origin/main --mock
+```
 
 Run tests:
 
@@ -143,3 +201,69 @@ graph rather than merely evaluating an isolated prompt.
 - Execute documentation builds in an isolated runner.
 - Create pull requests through a narrow tool service rather than giving the model GitHub access.
 - Add OIDC only when a workflow actually needs cloud access.
+
+Repository-local configuration (repo-doc.toml)
+
+You can commit a repo-local configuration file named repo-doc.toml at the root of a repository to provide repository-specific defaults. The tool will also accept an explicit path via --config-file.
+
+Supported keys (top-level table or nested under [tool."repo-doc"]) include:
+
+- allowed_doc_paths: array of strings. Paths or directories the agent may read or propose edits for (e.g. ["docs", "README.md"]).
+- base_branch: string. A default branch ref used by CI-oriented flows when no --base is provided.
+- max_diff_chars: integer. Maximum diff input size passed to the agent.
+- max_doc_chars: integer. Maximum document size the agent will read.
+- openai_model: string. Optional model override for the repo.
+
+Example repo-doc.toml
+
+```toml
+allowed_doc_paths = ["docs", "README.md", "guides"]
+base_branch = "main"
+max_diff_chars = 40000
+max_doc_chars = 12000
+openai_model = "gpt-5-mini"
+```
+
+Discovery and precedence
+
+- By default repo-doc.toml is read from the repository root (REPO_ROOT/repo-doc.toml). Use --config-file to point at a different file.
+- The TOML may be provided either as a top-level table or nested under the conventional tooling table: [tool."repo-doc"].
+- Precedence: explicit CLI flags take priority. In particular, repeating --allowed-doc-path on the CLI overrides values from repo-doc.toml and the ALLOWED_DOC_DIRS environment variable. Settings that are not provided on the CLI fall back to repo-doc.toml and then to built-in defaults / environment variables.
+
+CI-friendly check command
+
+Use repo-doc check when you want a CI gate that returns deterministic exit codes instead of producing a reviewable JSON payload.
+
+- Use-case: run in a GitHub Actions job, pre-push hook, or other CI to fail the job when documentation updates are required.
+
+Exit codes
+
+- 0 — no documentation update is required.
+- 2 — documentation updates are needed.
+- 3 — human review is required.
+- 4 — a deterministic safety gate blocked the run.
+
+Basic usage examples
+
+```bash
+# Run the CI-style check against the current repo
+repo-doc check --base origin/main
+
+# Use mock mode for deterministic CI demos (no API key required)
+repo-doc check --base origin/main --mock
+
+# Specify a repo-local config file explicitly
+repo-doc check --config-file /path/to/repo-doc.toml --base origin/main
+```
+
+Base-branch resolution for check
+
+When computing which committed changes to analyse the command determines an "effective base" using the following rule:
+
+- If you pass --base explicitly, that value is used.
+- If you provided a saved diff with --diff-file or asked the command to check staged changes (--staged), the command does not fall back to repo-doc.toml's base_branch (it treats the base as None and analyses the provided diff or staged changes directly).
+- Otherwise, when neither --diff-file nor --staged were used and no --base was given, check will use base_branch from repo-doc.toml if present.
+
+doctor command
+
+The doctor command validates local configuration without calling a model. It now accepts --config-file for repo-doc.toml discovery and reports the resolved configuration values (for example the base_branch and allowed paths) so you can verify the repository-specific settings.

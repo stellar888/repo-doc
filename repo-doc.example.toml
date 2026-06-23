@@ -1,0 +1,5 @@
+allowed_doc_paths = ["docs", "README.md"]
+base_branch = "main"
+max_diff_chars = 40000
+max_doc_chars = 12000
+openai_model = "gpt-5-mini"
