@@ -1,5 +1,12 @@
 # Architecture
 
+`repo-doc` is meant to feel like a careful reviewer, not a runaway automation. It can notice that
+your code and docs may be drifting apart, gather a narrow slice of context, and draft a patch. It
+does not get shell access, broad filesystem access, or permission to merge its own work.
+
+The personality of the system is simple: helpful, bounded, and willing to say "human review" when
+the evidence is not clean enough.
+
 ## Trust boundaries
 
 Trusted:

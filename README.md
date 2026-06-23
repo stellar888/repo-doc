@@ -1,6 +1,8 @@
 # repo-doc
 
-A deliberately constrained AI agent that checks whether code changes need documentation updates.
+Documentation drift starts quietly. A route changes here, a flag gets renamed there, and the docs
+fall one small step behind the code. `repo-doc` is a cautious little agent for catching that moment
+before it ships.
 
 The agent accepts a Git diff, determines whether documentation needs to change, safely reads
 relevant existing docs, and returns a reviewable Markdown proposal with a generated unified diff.
@@ -8,9 +10,23 @@ It uses LangGraph for stateful orchestration, LangChain's OpenAI integration for
 outputs, deterministic Python safety gates, Promptfoo for black-box evaluations, Pytest for unit
 tests, and GitHub Actions for CI.
 
+It is intentionally not a swaggering autonomous coding bot. It has a narrower personality: read
+the diff, inspect only allowed docs, make a grounded suggestion, and ask for human review when the
+evidence gets weird.
+
+```text
+                               __
+   ________  ____  ____   ___ / /___  _____
+  / ___/ _ \/ __ \/ __ \ / __  / __ \/ ___/
+ / /  /  __/ /_/ / /_/ /  /_/ /_/ / / /__
+/_/   \___/  ___/\____(_)_____\____/\___/
+          /_/
+```
+
 ## Why this architecture?
 
-This is not an unrestricted autonomous coding bot. The outer workflow is deterministic:
+The design goal is useful help without spooky action at a distance. The outer workflow is
+deterministic:
 
 1. Validate and truncate the incoming diff.
 2. Detect suspicious prompt-injection-like content.
@@ -23,6 +39,8 @@ This is not an unrestricted autonomous coding bot. The outer workflow is determi
 
 The model can recommend changes but cannot execute shell commands, read secrets, write outside
 approved documentation paths, commit, merge, or deploy code.
+
+In other words: the model gets a pencil, not the keys to the building.
 
 ## Quick start
 
@@ -202,19 +220,19 @@ graph rather than merely evaluating an isolated prompt.
 - Create pull requests through a narrow tool service rather than giving the model GitHub access.
 - Add OIDC only when a workflow actually needs cloud access.
 
-Repository-local configuration (repo-doc.toml)
+## Configuration details
 
-You can commit a repo-local configuration file named repo-doc.toml at the root of a repository to provide repository-specific defaults. The tool will also accept an explicit path via --config-file.
+You can commit `repo-doc.toml` at the root of any repository that uses this tool. That gives the
+agent local house rules: where docs live, which base branch CI should compare against, and how much
+context it may read.
 
-Supported keys (top-level table or nested under [tool."repo-doc"]) include:
+Supported keys can be top-level or nested under `[tool."repo-doc"]`:
 
-- allowed_doc_paths: array of strings. Paths or directories the agent may read or propose edits for (e.g. ["docs", "README.md"]).
-- base_branch: string. A default branch ref used by CI-oriented flows when no --base is provided.
-- max_diff_chars: integer. Maximum diff input size passed to the agent.
-- max_doc_chars: integer. Maximum document size the agent will read.
-- openai_model: string. Optional model override for the repo.
-
-Example repo-doc.toml
+- `allowed_doc_paths`: paths or directories the agent may read or propose edits for.
+- `base_branch`: default branch ref for CI-oriented checks when no `--base` is provided.
+- `max_diff_chars`: maximum diff input size passed to the agent.
+- `max_doc_chars`: maximum document size the agent will read.
+- `openai_model`: optional model override for the repository.
 
 ```toml
 allowed_doc_paths = ["docs", "README.md", "guides"]
@@ -224,46 +242,47 @@ max_doc_chars = 12000
 openai_model = "gpt-5-mini"
 ```
 
-Discovery and precedence
+Discovery and precedence:
 
-- By default repo-doc.toml is read from the repository root (REPO_ROOT/repo-doc.toml). Use --config-file to point at a different file.
-- The TOML may be provided either as a top-level table or nested under the conventional tooling table: [tool."repo-doc"].
-- Precedence: explicit CLI flags take priority. In particular, repeating --allowed-doc-path on the CLI overrides values from repo-doc.toml and the ALLOWED_DOC_DIRS environment variable. Settings that are not provided on the CLI fall back to repo-doc.toml and then to built-in defaults / environment variables.
+- By default, `repo-doc.toml` is read from the repository root.
+- Use `--config-file` to point at a different file.
+- CLI flags take priority over `repo-doc.toml`.
+- Values not set in the config fall back to environment variables and built-in defaults.
 
-CI-friendly check command
+## Check details
 
-Use repo-doc check when you want a CI gate that returns deterministic exit codes instead of producing a reviewable JSON payload.
+Use `repo-doc check` when you want a CI gate instead of an interactive review flow. It still prints
+the structured JSON result, but the exit code is the main signal.
 
-- Use-case: run in a GitHub Actions job, pre-push hook, or other CI to fail the job when documentation updates are required.
+Typical places to run it:
 
-Exit codes
+- GitHub Actions pull-request jobs.
+- Pre-push hooks.
+- Release checks before cutting a tag.
 
-- 0 — no documentation update is required.
-- 2 — documentation updates are needed.
-- 3 — human review is required.
-- 4 — a deterministic safety gate blocked the run.
+Exit codes:
 
-Basic usage examples
+- `0`: no documentation update is required.
+- `2`: documentation updates are needed.
+- `3`: human review is required.
+- `4`: a deterministic safety gate blocked the run.
+
+Examples:
 
 ```bash
-# Run the CI-style check against the current repo
 repo-doc check --base origin/main
-
-# Use mock mode for deterministic CI demos (no API key required)
 repo-doc check --base origin/main --mock
-
-# Specify a repo-local config file explicitly
 repo-doc check --config-file /path/to/repo-doc.toml --base origin/main
 ```
 
-Base-branch resolution for check
+Base-branch resolution:
 
-When computing which committed changes to analyse the command determines an "effective base" using the following rule:
+- If you pass `--base`, that value is used.
+- If you pass `--diff-file` or `--staged`, no base branch is inferred.
+- Otherwise, `check` uses `base_branch` from `repo-doc.toml` when present.
 
-- If you pass --base explicitly, that value is used.
-- If you provided a saved diff with --diff-file or asked the command to check staged changes (--staged), the command does not fall back to repo-doc.toml's base_branch (it treats the base as None and analyses the provided diff or staged changes directly).
-- Otherwise, when neither --diff-file nor --staged were used and no --base was given, check will use base_branch from repo-doc.toml if present.
+## Doctor
 
-doctor command
-
-The doctor command validates local configuration without calling a model. It now accepts --config-file for repo-doc.toml discovery and reports the resolved configuration values (for example the base_branch and allowed paths) so you can verify the repository-specific settings.
+`repo-doc doctor` validates local configuration without calling a model. Use it when a repository
+has its own config and you want to see exactly what the agent will believe before it thinks too
+hard about your diff.
