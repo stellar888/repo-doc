@@ -4,7 +4,7 @@ prompts:
   - '{{diff}}'
 
 providers:
-  - id: 'python:evals/provider.py'
+  - id: 'python:provider.py'
     label: full-agent-mock
     config:
       mock: true
