@@ -1,0 +1,1 @@
+"""Controlled documentation impact agent."""

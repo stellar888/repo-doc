@@ -1,0 +1,61 @@
+name: Reusable agent CI
+
+on:
+  workflow_call:
+    inputs:
+      run_promptfoo:
+        description: Run Promptfoo evaluation suite
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Unit tests
+        run: pytest --cov=repo_doc_agent --cov-report=term-missing
+
+      - name: Set up Node
+        if: inputs.run_promptfoo
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run Promptfoo deterministic evaluations
+        if: inputs.run_promptfoo
+        run: |
+          mkdir -p artifacts
+          npx promptfoo@latest eval \
+            -c evals/promptfooconfig.yaml \
+            -o artifacts/promptfoo.json \
+            -o artifacts/promptfoo.html \
+            -o artifacts/promptfoo.junit.xml
+
+      - name: Upload evaluation reports
+        if: always() && inputs.run_promptfoo
+        uses: actions/upload-artifact@v4
+        with:
+          name: promptfoo-reports
+          path: artifacts/
+          if-no-files-found: ignore

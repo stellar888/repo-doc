@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-repo-maintenance-agent"
+version = "0.1.0"
+description = "Interview demo: a controlled AI agent that assesses documentation impact from code changes."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "langgraph>=0.6,<2",
+  "langchain-openai>=0.3,<2",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "typer>=0.12,<1",
+  "rich>=13.7,<15",
+  "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<10",
+  "pytest-cov>=5,<8",
+  "ruff>=0.6,<1",
+  "mypy>=1.11,<2",
+]
+
+[project.scripts]
+repo-doc-agent = "repo_doc_agent.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repo_doc_agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["repo_doc_agent"]

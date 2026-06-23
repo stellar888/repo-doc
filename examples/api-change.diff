@@ -1,0 +1,9 @@
+diff --git a/src/api.py b/src/api.py
+index 0123456..789abcd 100644
+--- a/src/api.py
++++ b/src/api.py
+@@ -14,6 +14,11 @@ app = FastAPI()
++@app.get("/v1/widgets", status_code=200)
++def list_widgets(limit: int = 20):
++    """Return at most `limit` widgets."""
++    return {"items": repository.list(limit=limit)}
