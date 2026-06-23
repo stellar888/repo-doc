@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ai-repo-maintenance-agent"
+name = "repo-doc"
 version = "0.1.0"
-description = "Interview demo: a controlled AI agent that assesses documentation impact from code changes."
+description = "A controlled AI agent that assesses documentation impact from code changes."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -27,6 +27,7 @@ dev = [
 ]
 
 [project.scripts]
+repo-doc = "repo_doc_agent.cli:app"
 repo-doc-agent = "repo_doc_agent.cli:app"
 
 [tool.hatch.build.targets.wheel]

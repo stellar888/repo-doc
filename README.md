@@ -1,4 +1,6 @@
-# AI Repository Maintenance Agent
+# repo-doc
+
+A deliberately constrained AI agent that checks whether code changes need documentation updates.
 
 The agent accepts a Git diff, determines whether documentation needs to change, safely reads
 relevant existing docs, and returns a reviewable Markdown proposal with a generated unified diff.
@@ -31,24 +33,75 @@ pip install -e ".[dev]"
 cp .env.example .env
 ```
 
-Run safely without an API key:
+Run safely without an API key against the included demo diff:
 
 ```bash
-repo-doc-agent analyse --diff-file examples/api-change.diff --mock
+repo-doc analyse --diff-file examples/api-change.diff --mock
 ```
 
 Run with OpenAI:
 
 ```bash
 export OPENAI_API_KEY="..."
-repo-doc-agent analyse --diff-file examples/api-change.diff
+repo-doc analyse --diff-file examples/api-change.diff
 ```
+
+## Use on your own repo
+
+Install `repo-doc`, then run it from the repository you are changing:
+
+```bash
+cd /path/to/your/project
+repo-doc analyse
+```
+
+By default, this analyses both staged and unstaged changes by combining `git diff --cached` and
+`git diff`. That is the most useful mode while you are developing on a branch and want to ask:
+"Should I update docs before I commit?"
+
+Common modes:
+
+```bash
+# Analyse all current uncommitted changes in this repo
+repo-doc analyse
+
+# Analyse only staged changes, useful in a pre-commit flow
+repo-doc analyse --staged
+
+# Analyse all committed changes on this branch compared with main
+repo-doc analyse --base main
+
+# Analyse a saved diff, useful in CI or external tooling
+repo-doc analyse --diff-file /tmp/change.diff
+
+# Run against another repo without cd-ing into it
+repo-doc analyse --repo-root /path/to/your/project
+```
+
+Limit the docs it may read or propose edits for:
+
+```bash
+repo-doc analyse \
+  --allowed-doc-path docs \
+  --allowed-doc-path README.md \
+  --allowed-doc-path guides
+```
+
+The output is JSON. The important fields are:
+
+- `status`: `ok`, `human_review`, or `blocked`.
+- `analysis`: the model's structured explanation of documentation impact.
+- `proposal.edits`: proposed Markdown changes.
+- `proposal.edits[].unified_diff`: a patch-style review artifact.
+
+The tool does not write, commit, merge, or open pull requests automatically. For now, it proposes
+changes and generates reviewable diffs so you can decide what to apply.
 
 Useful settings:
 
 - `OPENAI_MODEL`: model used by LangChain's OpenAI chat client.
 - `ALLOWED_DOC_DIRS`: comma-separated documentation paths the agent may read or propose edits for.
-- `REPOSITORY_ROOT`: root used when reading existing documentation.
+- `REPOSITORY_ROOT`: root used when reading existing documentation when `--repo-root` is omitted.
 - `MAX_DIFF_CHARS` and `MAX_DOC_CHARS`: input caps before model calls.
 
 Run tests:
@@ -56,6 +109,7 @@ Run tests:
 ```bash
 pytest
 ruff check .
+mypy
 ```
 
 Run Promptfoo evaluations:
