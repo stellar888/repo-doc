@@ -19,10 +19,10 @@ This is not an unrestricted autonomous coding bot. The outer workflow is determi
 5. Ask the model for a bounded documentation proposal using that context.
 6. Generate unified diffs from trusted application code.
 7. Apply deterministic path, schema, and content checks.
-8. Return a reviewable result; never merge or deploy automatically.
+8. Return a reviewable result by default, or write documentation only when `--apply` is used.
 
 The model can recommend changes but cannot execute shell commands, read secrets, write outside
-approved documentation paths, or merge code.
+approved documentation paths, commit, merge, or deploy code.
 
 ## Quick start
 
@@ -78,6 +78,17 @@ repo-doc analyse --diff-file /tmp/change.diff
 repo-doc analyse --repo-root /path/to/your/project
 ```
 
+By default, `repo-doc` is review-only. To write safe documentation proposals into the allowed doc
+files, opt in explicitly:
+
+```bash
+repo-doc analyse --apply
+```
+
+`--apply` only writes when `status` is `ok` and `proposal.action` is `update`. It refuses to write
+for `human_review`, `blocked`, and `no_change` results, and it still only writes inside allowed doc
+paths.
+
 Limit the docs it may read or propose edits for:
 
 ```bash
@@ -94,8 +105,8 @@ The output is JSON. The important fields are:
 - `proposal.edits`: proposed Markdown changes.
 - `proposal.edits[].unified_diff`: a patch-style review artifact.
 
-The tool does not write, commit, merge, or open pull requests automatically. For now, it proposes
-changes and generates reviewable diffs so you can decide what to apply.
+The tool never commits, merges, deploys, or opens pull requests automatically. Without `--apply`,
+it only proposes changes and generates reviewable diffs.
 
 Useful settings:
 

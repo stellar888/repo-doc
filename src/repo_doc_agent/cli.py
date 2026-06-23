@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.syntax import Syntax
 
 from .config import Settings
+from .documentation import apply_documentation_proposal
 from .graph import run_agent
 from .model import MockStructuredModel, OpenAIStructuredModel
 
@@ -94,6 +95,13 @@ def analyse(
         typer.Option(help="Analyse committed branch changes since the merge-base with this ref."),
     ] = None,
     mock: Annotated[bool, typer.Option(help="Use deterministic local model.")] = False,
+    apply: Annotated[
+        bool,
+        typer.Option(
+            "--apply",
+            help="Write proposed documentation changes when the result is safe to apply.",
+        ),
+    ] = False,
     output: Annotated[Path | None, typer.Option(help="Optional JSON output file.")] = None,
 ) -> None:
     """Analyse Git changes and produce a bounded documentation proposal."""
@@ -124,6 +132,28 @@ def analyse(
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(rendered + "\n", encoding="utf-8")
+
+    if apply:
+        if result.status != "ok" or result.proposal.action != "update":
+            console.print(
+                "[yellow]Documentation changes were not applied because the result is not "
+                "a safe update proposal.[/yellow]"
+            )
+            raise typer.Exit(code=1)
+
+        applied_paths = apply_documentation_proposal(
+            proposal=result.proposal,
+            repository_root=repo_root.resolve(),
+            allowed_paths=settings.allowed_paths,
+        )
+        if not applied_paths:
+            console.print(
+                "[yellow]No documentation files changed; proposed content already exists.[/yellow]"
+            )
+            return
+
+        for path in applied_paths:
+            console.print(f"[green]Applied documentation update:[/green] {path}")
 
 
 @app.command()

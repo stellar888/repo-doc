@@ -10,7 +10,9 @@
 - Secret-like output causes the run to be blocked.
 - Suspicious input causes human review.
 - Forbidden candidate documentation paths cause the run to be blocked.
-- The demo produces proposals only; it never commits or merges.
+- Documentation writes require explicit `--apply`, only write allowed documentation paths, and
+  refuse `human_review`, `blocked`, and `no_change` results.
+- The tool never commits or merges.
 - GitHub Actions uses `contents: read`.
 - API-backed evaluations should not run on untrusted fork pull requests with secrets.
 

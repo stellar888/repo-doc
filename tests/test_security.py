@@ -1,4 +1,7 @@
-from repo_doc_agent.documentation import read_documentation
+import pytest
+
+from repo_doc_agent.documentation import apply_documentation_proposal, read_documentation
+from repo_doc_agent.schemas import DocumentationProposal
 from repo_doc_agent.security import path_is_allowed, scan_untrusted_text
 
 
@@ -44,3 +47,98 @@ def test_read_documentation_caps_content(tmp_path) -> None:
     assert context.exists
     assert context.truncated
     assert context.content == "abc"
+
+
+def test_apply_documentation_proposal_updates_existing_file(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "api.md").write_text("# API\n", encoding="utf-8")
+    proposal = DocumentationProposal(
+        action="update",
+        summary="Document widgets.",
+        edits=[
+            {
+                "path": "docs/api.md",
+                "rationale": "Widgets are externally visible.",
+                "proposed_markdown": "## Widgets\n\nUse `GET /v1/widgets`.",
+            }
+        ],
+    )
+
+    applied = apply_documentation_proposal(
+        proposal=proposal,
+        repository_root=tmp_path,
+        allowed_paths=("docs", "README.md"),
+    )
+
+    assert applied == ["docs/api.md"]
+    assert "# API\n\n## Widgets" in (docs / "api.md").read_text(encoding="utf-8")
+
+
+def test_apply_documentation_proposal_creates_allowed_file(tmp_path) -> None:
+    proposal = DocumentationProposal(
+        action="update",
+        summary="Document widgets.",
+        edits=[
+            {
+                "path": "docs/api.md",
+                "rationale": "Widgets are externally visible.",
+                "proposed_markdown": "## Widgets\n\nUse `GET /v1/widgets`.",
+            }
+        ],
+    )
+
+    applied = apply_documentation_proposal(
+        proposal=proposal,
+        repository_root=tmp_path,
+        allowed_paths=("docs", "README.md"),
+    )
+
+    assert applied == ["docs/api.md"]
+    assert (tmp_path / "docs" / "api.md").exists()
+
+
+def test_apply_documentation_proposal_is_idempotent(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "api.md").write_text("## Widgets\n\nUse `GET /v1/widgets`.\n", encoding="utf-8")
+    proposal = DocumentationProposal(
+        action="update",
+        summary="Document widgets.",
+        edits=[
+            {
+                "path": "docs/api.md",
+                "rationale": "Widgets are externally visible.",
+                "proposed_markdown": "## Widgets\n\nUse `GET /v1/widgets`.",
+            }
+        ],
+    )
+
+    applied = apply_documentation_proposal(
+        proposal=proposal,
+        repository_root=tmp_path,
+        allowed_paths=("docs", "README.md"),
+    )
+
+    assert applied == []
+
+
+def test_apply_documentation_proposal_rejects_forbidden_path(tmp_path) -> None:
+    proposal = DocumentationProposal(
+        action="update",
+        summary="Bad path.",
+        edits=[
+            {
+                "path": "../README.md",
+                "rationale": "Escape attempt.",
+                "proposed_markdown": "Nope.",
+            }
+        ],
+    )
+
+    with pytest.raises(PermissionError):
+        apply_documentation_proposal(
+            proposal=proposal,
+            repository_root=tmp_path,
+            allowed_paths=("docs", "README.md"),
+        )
