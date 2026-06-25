@@ -9,6 +9,7 @@ from .security import path_is_allowed
 
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
 DIFF_PATH_PATTERN = re.compile(r"^diff --git a/(.+?) b/(.+)$")
+HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 
 
 def _tokens(text: str) -> set[str]:
@@ -183,6 +184,99 @@ def build_unified_diff(*, path: str, before: str, after: str) -> str:
     )
 
 
+def _normalize_heading(heading: str) -> str:
+    return " ".join(heading.strip().strip("#").strip().lower().split())
+
+
+def _find_markdown_section(markdown: str, heading: str) -> list[tuple[int, int]]:
+    target = _normalize_heading(heading)
+    lines = markdown.splitlines(keepends=True)
+    offsets: list[int] = []
+    position = 0
+    for line in lines:
+        offsets.append(position)
+        position += len(line)
+
+    matches: list[tuple[int, int]] = []
+    for index, line in enumerate(lines):
+        match = HEADING_PATTERN.match(line.rstrip("\n"))
+        if not match or _normalize_heading(match.group(2)) != target:
+            continue
+
+        level = len(match.group(1))
+        start = offsets[index]
+        end = len(markdown)
+        for next_index in range(index + 1, len(lines)):
+            next_match = HEADING_PATTERN.match(lines[next_index].rstrip("\n"))
+            if next_match and len(next_match.group(1)) <= level:
+                end = offsets[next_index]
+                break
+        matches.append((start, end))
+
+    return matches
+
+
+def _replace_markdown_section(*, before: str, heading: str, proposed_markdown: str) -> str:
+    matches = _find_markdown_section(before, heading)
+    if len(matches) != 1:
+        return before
+
+    start, end = matches[0]
+    proposed = proposed_markdown.strip() + "\n"
+    tail = before[end:]
+    if tail and not tail.startswith("\n"):
+        proposed += "\n"
+    return before[:start] + proposed + tail
+
+
+def _apply_edit_to_markdown(
+    *,
+    before: str,
+    operation: str,
+    target_heading: str | None,
+    proposed_markdown: str,
+) -> str:
+    if operation == "create_file":
+        return proposed_markdown.strip() + "\n" if not before else before
+    if operation == "replace_section" and target_heading:
+        return _replace_markdown_section(
+            before=before,
+            heading=target_heading,
+            proposed_markdown=proposed_markdown,
+        )
+    return _merge_markdown(before=before, proposed_markdown=proposed_markdown)
+
+
+def validate_edit_operations(
+    proposal: DocumentationProposal,
+    contexts: list[DocumentationContext],
+) -> list[str]:
+    context_by_path = {context.path: context for context in contexts}
+    flags: list[str] = []
+
+    for edit in proposal.edits:
+        context = context_by_path.get(edit.path)
+        exists = bool(context and context.exists)
+        before = context.content if context and context.exists else ""
+
+        if edit.operation == "create_file" and exists:
+            flags.append(f"invalid_edit_operation:{edit.path}:create_file_exists")
+
+        if edit.operation == "replace_section":
+            if not edit.target_heading:
+                flags.append(f"invalid_edit_operation:{edit.path}:missing_target_heading")
+            elif not exists:
+                flags.append(f"invalid_edit_operation:{edit.path}:missing_file")
+            else:
+                matches = _find_markdown_section(before, edit.target_heading)
+                if not matches:
+                    flags.append(f"invalid_edit_operation:{edit.path}:heading_not_found")
+                elif len(matches) > 1:
+                    flags.append(f"invalid_edit_operation:{edit.path}:heading_not_unique")
+
+    return flags
+
+
 def attach_unified_diffs(
     proposal: DocumentationProposal,
     contexts: list[DocumentationContext],
@@ -193,11 +287,12 @@ def attach_unified_diffs(
     for edit in proposal.edits:
         context = context_by_path.get(edit.path)
         before = context.content if context and context.exists else ""
-        proposed = edit.proposed_markdown.strip() + "\n"
-        if before and proposed.strip() not in before:
-            after = before.rstrip() + "\n\n" + proposed
-        else:
-            after = proposed
+        after = _apply_edit_to_markdown(
+            before=before,
+            operation=edit.operation,
+            target_heading=edit.target_heading,
+            proposed_markdown=edit.proposed_markdown,
+        )
 
         edits.append(
             edit.model_copy(
@@ -240,7 +335,12 @@ def apply_documentation_proposal(
             raise IsADirectoryError(f"Documentation path is not a file: {edit.path}")
 
         before = target.read_text(encoding="utf-8") if target.exists() else ""
-        after = _merge_markdown(before=before, proposed_markdown=edit.proposed_markdown)
+        after = _apply_edit_to_markdown(
+            before=before,
+            operation=edit.operation,
+            target_heading=edit.target_heading,
+            proposed_markdown=edit.proposed_markdown,
+        )
         if after == before:
             continue
 

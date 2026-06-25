@@ -209,10 +209,16 @@ def _render_markdown_result(result: AgentResult) -> str:
     lines.extend(["", "## Proposed Edits", ""])
     if result.proposal.edits:
         for edit in result.proposal.edits:
+            lines.extend([
+                f"### `{edit.path}`",
+                "",
+                f"**Operation:** `{edit.operation}`",
+                "",
+            ])
+            if edit.target_heading:
+                lines.extend([f"**Target heading:** `{edit.target_heading}`", ""])
             lines.extend(
                 [
-                    f"### `{edit.path}`",
-                    "",
                     f"**Rationale:** {edit.rationale}",
                     "",
                     "```markdown",
@@ -275,6 +281,14 @@ def _render_agent_json_result(result: AgentResult) -> str:
         "summary": result.proposal.summary or result.analysis.summary,
         "candidate_files": result.analysis.candidate_files,
         "edit_paths": edit_paths,
+        "edits": [
+            {
+                "path": edit.path,
+                "operation": edit.operation,
+                "target_heading": edit.target_heading,
+            }
+            for edit in result.proposal.edits
+        ],
         "documentation_files": edit_paths or result.analysis.candidate_files,
         "safety_flags": result.safety_flags,
         "reviewer_notes": result.proposal.reviewer_notes,

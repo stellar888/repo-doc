@@ -10,6 +10,7 @@ from .documentation import (
     attach_unified_diffs,
     discover_documentation_candidates,
     read_documentation,
+    validate_edit_operations,
 )
 from .model import StructuredModel
 from .prompts import ANALYSIS_TEMPLATE, PROMPT_VERSION, PROPOSAL_TEMPLATE, SYSTEM_POLICY
@@ -29,6 +30,33 @@ class AgentState(TypedDict, total=False):
 
 def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
     allowed = settings.allowed_paths
+
+    def read_context(
+        *,
+        path: str,
+        repository_root: Path,
+        flags: list[str],
+    ) -> DocumentationContext | None:
+        try:
+            context = read_documentation(
+                path=path,
+                repository_root=repository_root,
+                allowed_paths=allowed,
+                max_chars=settings.max_doc_chars,
+            )
+            if contains_secret(context.content):
+                flags.append(f"possible_secret_in_documentation:{path}")
+                context = context.model_copy(
+                    update={"content": "[REDACTED: possible secret-like value detected]"}
+                )
+            if context.truncated:
+                flags.append(f"documentation_context_truncated:{path}")
+            return context
+        except PermissionError:
+            flags.append(f"forbidden_candidate_path:{path}")
+        except (OSError, UnicodeError) as exc:
+            flags.append(f"unreadable_candidate_path:{path}:{type(exc).__name__}")
+        return None
 
     def prepare(state: AgentState) -> AgentState:
         raw = state["raw_diff"]
@@ -97,25 +125,9 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
         analysis = analysis.model_copy(update={"candidate_files": candidate_files})
 
         for path in candidate_files:
-            try:
-                context = read_documentation(
-                    path=path,
-                    repository_root=repository_root,
-                    allowed_paths=allowed,
-                    max_chars=settings.max_doc_chars,
-                )
-                if contains_secret(context.content):
-                    flags.append(f"possible_secret_in_documentation:{path}")
-                    context = context.model_copy(
-                        update={"content": "[REDACTED: possible secret-like value detected]"}
-                    )
-                if context.truncated:
-                    flags.append(f"documentation_context_truncated:{path}")
+            context = read_context(path=path, repository_root=repository_root, flags=flags)
+            if context:
                 contexts.append(context)
-            except PermissionError:
-                flags.append(f"forbidden_candidate_path:{path}")
-            except (OSError, UnicodeError) as exc:
-                flags.append(f"unreadable_candidate_path:{path}:{type(exc).__name__}")
 
         return {
             "analysis": analysis,
@@ -153,6 +165,25 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
         )
         return {"proposal": proposal}
 
+    def read_edit_docs(state: AgentState) -> AgentState:
+        flags = list(state.get("safety_flags", []))
+        contexts = list(state.get("documentation_contexts", []))
+        context_paths = {context.path for context in contexts}
+        repository_root = Path(settings.repository_root)
+
+        for edit in state["proposal"].edits:
+            if edit.path in context_paths:
+                continue
+            context = read_context(path=edit.path, repository_root=repository_root, flags=flags)
+            if context:
+                contexts.append(context)
+                context_paths.add(context.path)
+
+        return {
+            "documentation_contexts": contexts,
+            "safety_flags": list(dict.fromkeys(flags)),
+        }
+
     def patch(state: AgentState) -> AgentState:
         return {
             "proposal": attach_unified_diffs(
@@ -172,6 +203,13 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
         if invalid_paths:
             flags.extend(f"forbidden_path:{path}" for path in invalid_paths)
 
+        flags.extend(
+            validate_edit_operations(
+                proposal,
+                state.get("documentation_contexts", []),
+            )
+        )
+
         if contains_secret(proposal.model_dump_json()):
             flags.append("possible_secret_in_output")
 
@@ -180,6 +218,7 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
                 (
                     "forbidden_path:",
                     "forbidden_candidate_path:",
+                    "invalid_edit_operation:",
                     "possible_secret_in_output",
                 )
             )
@@ -224,6 +263,7 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
     graph.add_node("read_docs", read_docs)
     graph.add_node("no_change", no_change)
     graph.add_node("propose", propose)
+    graph.add_node("read_edit_docs", read_edit_docs)
     graph.add_node("patch", patch)
     graph.add_node("validate", validate)
 
@@ -241,7 +281,8 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
     )
     graph.add_edge("no_change", "validate")
     graph.add_edge("read_docs", "propose")
-    graph.add_edge("propose", "patch")
+    graph.add_edge("propose", "read_edit_docs")
+    graph.add_edge("read_edit_docs", "patch")
     graph.add_edge("patch", "validate")
     graph.add_edge("validate", END)
     return graph.compile()

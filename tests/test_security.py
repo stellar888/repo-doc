@@ -4,8 +4,9 @@ from repo_doc_agent.documentation import (
     apply_documentation_proposal,
     discover_documentation_candidates,
     read_documentation,
+    validate_edit_operations,
 )
-from repo_doc_agent.schemas import DocumentationProposal
+from repo_doc_agent.schemas import DocumentationContext, DocumentationProposal
 from repo_doc_agent.security import path_is_allowed, scan_untrusted_text
 
 
@@ -122,6 +123,66 @@ def test_apply_documentation_proposal_creates_allowed_file(tmp_path) -> None:
 
     assert applied == ["docs/api.md"]
     assert (tmp_path / "docs" / "api.md").exists()
+
+
+def test_apply_documentation_proposal_replaces_unique_section(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    api_doc = docs / "api.md"
+    api_doc.write_text(
+        "# API\n\n## Widgets\n\nOld widget docs.\n\n## Gadgets\n\nKeep me.\n",
+        encoding="utf-8",
+    )
+    proposal = DocumentationProposal(
+        action="update",
+        summary="Update widgets.",
+        edits=[
+            {
+                "path": "docs/api.md",
+                "operation": "replace_section",
+                "target_heading": "Widgets",
+                "rationale": "Widgets changed.",
+                "proposed_markdown": "## Widgets\n\nNew widget docs.",
+            }
+        ],
+    )
+
+    applied = apply_documentation_proposal(
+        proposal=proposal,
+        repository_root=tmp_path,
+        allowed_paths=("docs", "README.md"),
+    )
+
+    content = api_doc.read_text(encoding="utf-8")
+    assert applied == ["docs/api.md"]
+    assert "New widget docs." in content
+    assert "Old widget docs." not in content
+    assert "## Gadgets\n\nKeep me." in content
+
+
+def test_validate_edit_operations_rejects_ambiguous_replace_section() -> None:
+    proposal = DocumentationProposal(
+        action="update",
+        summary="Update widgets.",
+        edits=[
+            {
+                "path": "docs/api.md",
+                "operation": "replace_section",
+                "target_heading": "Widgets",
+                "rationale": "Widgets changed.",
+                "proposed_markdown": "## Widgets\n\nNew widget docs.",
+            }
+        ],
+    )
+    context = DocumentationContext(
+        path="docs/api.md",
+        exists=True,
+        content="# API\n\n## Widgets\n\nOne.\n\n## Widgets\n\nTwo.\n",
+    )
+
+    assert validate_edit_operations(proposal, [context]) == [
+        "invalid_edit_operation:docs/api.md:heading_not_unique"
+    ]
 
 
 def test_apply_documentation_proposal_is_idempotent(tmp_path) -> None:

@@ -9,6 +9,7 @@
 - The model has no shell, network, GitHub, or secrets tool.
 - Output is constrained using Pydantic schemas.
 - Proposed paths must stay inside configured documentation paths.
+- Invalid edit operations, such as replacing a missing or ambiguous section, block the run.
 - Secret-like output causes the run to be blocked.
 - Suspicious input causes human review.
 - Forbidden candidate documentation paths cause the run to be blocked.

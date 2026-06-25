@@ -161,6 +161,7 @@ The output is JSON. The important fields are:
 - `status`: `ok`, `human_review`, or `blocked`.
 - `analysis`: the model's structured explanation of documentation impact.
 - `proposal.edits`: proposed Markdown changes.
+- `proposal.edits[].operation`: `create_file`, `append_section`, or `replace_section`.
 - `proposal.edits[].unified_diff`: a patch-style review artifact.
 
 The tool never commits, merges, deploys, or opens pull requests automatically. Without `--apply`,

@@ -40,6 +40,8 @@ class DocumentationContext(BaseModel):
 
 class DocEdit(BaseModel):
     path: str = Field(min_length=1, max_length=300)
+    operation: Literal["create_file", "append_section", "replace_section"] = "append_section"
+    target_heading: str | None = Field(default=None, max_length=200)
     rationale: str = Field(min_length=1, max_length=600)
     proposed_markdown: str = Field(min_length=1, max_length=8_000)
     unified_diff: str | None = Field(default=None, max_length=16_000)
