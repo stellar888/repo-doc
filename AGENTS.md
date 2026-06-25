@@ -29,6 +29,15 @@ For coverage:
 .venv/bin/python -m pytest --cov=repo_doc_agent --cov-report=term-missing
 ```
 
+For package/reinstall validation:
+
+```bash
+.venv/bin/python -m build
+.venv/bin/python -m pip install --force-reinstall --no-deps dist/*.whl
+.venv/bin/repo-doc --version
+.venv/bin/repo-doc --help
+```
+
 For deterministic local repo-doc runs:
 
 ```bash
@@ -72,4 +81,3 @@ Branch on:
 - `next_action=update_documentation`: update docs or run a safe apply path.
 - `next_action=request_human_review`: stop and ask a human.
 - `next_action=stop_for_safety_review`: stop; do not apply changes.
-

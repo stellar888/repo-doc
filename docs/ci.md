@@ -41,6 +41,18 @@ repo-doc check --base origin/main --format agent-json --output repo-doc-agent.js
 Use next_action and can_apply when another coding agent needs to decide whether to continue,
 apply documentation changes, request human review, or stop for a safety issue.
 
+Package smoke test
+
+The reusable CI workflow also builds the package and smoke-tests the installed wheel:
+
+```bash
+python -m build
+python -m pip install --force-reinstall --no-deps dist/*.whl
+repo-doc --version
+repo-doc --help
+repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json
+```
+
 Base-branch resolution details
 
 When check runs against committed changes it needs a base ref to compute the diff. The effective base is chosen like this:

@@ -12,6 +12,13 @@ from repo_doc_agent.schemas import AgentResult, DocumentationProposal, Finding, 
 runner = CliRunner()
 
 
+def test_version_option_reports_package_version() -> None:
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert "repo-doc 0.3.0" in result.output
+
+
 def test_init_creates_detected_project_config(tmp_path: Path) -> None:
     (tmp_path / "docs").mkdir()
     (tmp_path / "README.md").write_text("# Project\n", encoding="utf-8")

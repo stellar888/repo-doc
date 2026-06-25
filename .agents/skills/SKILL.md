@@ -66,6 +66,15 @@ Use these fields as the stable automation contract:
 
 ## Common Commands
 
+Validate a built package before reinstalling or publishing:
+
+```bash
+python -m build
+python -m pip install --force-reinstall --no-deps dist/*.whl
+repo-doc --version
+repo-doc --help
+```
+
 Run against staged changes:
 
 ```bash
@@ -97,4 +106,3 @@ repo-doc check --include-agents-doc --format agent-json --output repo-doc-agent.
 - Keep doc changes scoped to `documentation_files`.
 - Re-run repo-doc after changing docs.
 - Report safety flags plainly in the final response.
-

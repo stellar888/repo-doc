@@ -13,6 +13,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.syntax import Syntax
 
+from . import __version__
 from .config import ProjectConfig, Settings, apply_project_config, load_project_config
 from .documentation import apply_documentation_proposal
 from .graph import run_agent
@@ -21,7 +22,7 @@ from .schemas import AgentResult
 
 OutputFormat = Literal["json", "agent-json", "markdown", "rich"]
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(no_args_is_help=True, invoke_without_command=True)
 console = Console()
 log_console = Console(stderr=True)
 
@@ -33,6 +34,23 @@ BANNER = r"""
 /_/   \___/  ___/\____(_)_____\____/\___/
           /_/
 """.strip("\n")
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            help="Show the installed repo-doc version and exit.",
+            is_eager=True,
+        ),
+    ] = False,
+) -> None:
+    """Controlled documentation-impact agent."""
+    if version:
+        console.print(f"repo-doc {__version__}")
+        raise typer.Exit()
 
 
 def _print_banner(command: str) -> None:

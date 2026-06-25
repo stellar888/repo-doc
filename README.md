@@ -246,6 +246,10 @@ Run tests:
 pytest
 ruff check .
 mypy
+python -m build
+python -m pip install --force-reinstall --no-deps dist/*.whl
+repo-doc --version
+repo-doc --help
 ```
 
 Run Promptfoo evaluations:
