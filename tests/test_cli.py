@@ -16,7 +16,7 @@ def test_version_option_reports_package_version() -> None:
     result = runner.invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert "repo-doc 0.3.0" in result.output
+    assert "repo-doc 0.4.0" in result.output
 
 
 def test_init_creates_detected_project_config(tmp_path: Path) -> None:
@@ -340,3 +340,37 @@ diff --git a/src/math.py b/src/math.py
     assert payload["next_action"] == "no_documentation_change"
     assert payload["check_exit_code"] == 0
     assert payload["can_apply"] is False
+
+
+def test_check_quiet_agent_json_suppresses_status_output(tmp_path: Path) -> None:
+    diff_file = tmp_path / "change.diff"
+    diff_file.write_text(
+        """
+diff --git a/src/math.py b/src/math.py
+-def add(a, b): return a+b
++def add(left, right): return left + right
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "check",
+            "--diff-file",
+            str(diff_file),
+            "--repo-root",
+            str(tmp_path),
+            "--mock",
+            "--format",
+            "agent-json",
+            "--quiet",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert result.output.lstrip().startswith("{")
+    assert "repo-doc check" not in result.output
+    assert "No documentation update required" not in result.output
+    payload = json.loads(result.output)
+    assert payload["next_action"] == "no_documentation_change"

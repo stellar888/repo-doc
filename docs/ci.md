@@ -6,7 +6,7 @@ Why use check instead of analyse?
 
 - check is designed to be non-interactive and to return deterministic exit codes so CI jobs can succeed or fail based on the documentation status without parsing JSON.
 - It still prints a JSON payload to stdout for debugging or artifact storage, and it supports an --output file for CI artifacting.
-- For agentic workflows, --format agent-json emits a compact contract with next_action, check_exit_code, can_apply, documentation files, and safety flags.
+- For agentic workflows, --format agent-json --quiet emits a compact contract with next_action, check_exit_code, can_apply, documentation files, and safety flags.
 
 Exit codes
 
@@ -35,7 +35,7 @@ repo-doc check --base origin/main --mock
 Agent-friendly output
 
 ```bash
-repo-doc check --base origin/main --format agent-json --output repo-doc-agent.json
+repo-doc check --base origin/main --format agent-json --quiet --output repo-doc-agent.json
 ```
 
 Use next_action and can_apply when another coding agent needs to decide whether to continue,
@@ -50,7 +50,7 @@ python -m build
 python -m pip install --force-reinstall --no-deps dist/*.whl
 repo-doc --version
 repo-doc --help
-repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json
+repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json --quiet
 ```
 
 Base-branch resolution details

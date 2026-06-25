@@ -178,12 +178,12 @@ repo-doc analyse --format json
 For coding agents and automation, emit the compact action contract:
 
 ```bash
-repo-doc check --format agent-json
+repo-doc check --format agent-json --quiet
 ```
 
 `agent-json` includes `next_action`, `check_exit_code`, `can_apply`, candidate files, edit paths,
-safety flags, reviewer notes, model metadata, and the prompt version. Use it when another agent
-needs to decide whether to continue, update docs, or stop for review.
+safety flags, reviewer notes, model metadata, and the prompt version. Use `--quiet` when another
+agent needs clean stdout to decide whether to continue, update docs, or stop for review.
 
 For humans, generate a Markdown preview:
 

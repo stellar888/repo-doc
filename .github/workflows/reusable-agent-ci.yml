@@ -45,7 +45,7 @@ jobs:
           repo-doc --version
           repo-doc --help
           repo-doc init --repo-root "$RUNNER_TEMP" --config-file "$RUNNER_TEMP/repo-doc.toml" --force
-          repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json
+          repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json --quiet
 
       - name: Set up Node
         if: inputs.run_promptfoo

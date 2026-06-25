@@ -53,13 +53,18 @@ def main(
         raise typer.Exit()
 
 
-def _print_banner(command: str) -> None:
+def _print_banner(command: str, *, quiet: bool) -> None:
+    if quiet:
+        return
     log_console.print(f"[cyan]{BANNER}[/cyan]")
     log_console.print(f"[bold]repo-doc[/bold] {command}\n")
 
 
 @contextmanager
-def _step(message: str) -> Iterator[None]:
+def _step(message: str, *, quiet: bool) -> Iterator[None]:
+    if quiet:
+        yield
+        return
     with log_console.status(f"[cyan]{message}[/cyan]", spinner="dots"):
         yield
     log_console.print(f"[green]OK[/green] {message}")
@@ -169,8 +174,9 @@ def _run_analysis(
     staged: bool,
     base: str | None,
     mock: bool,
+    quiet: bool,
 ) -> AgentResult:
-    with _step("Reading Git changes"):
+    with _step("Reading Git changes", quiet=quiet):
         diff = _load_diff(
             diff_file=diff_file,
             repo_root=repo_root,
@@ -178,10 +184,11 @@ def _run_analysis(
             base=base,
         )
     if not diff.strip():
-        log_console.print("[yellow]No Git diff found to analyse.[/yellow]")
+        if not quiet:
+            log_console.print("[yellow]No Git diff found to analyse.[/yellow]")
         raise typer.Exit(code=1)
 
-    with _step("Running documentation agent"):
+    with _step("Running documentation agent", quiet=quiet):
         model = MockStructuredModel() if mock else OpenAIStructuredModel(settings)
         return run_agent(
             diff=diff,
@@ -384,16 +391,21 @@ def init(
         bool,
         typer.Option("--force", help="Overwrite an existing repo-doc.toml."),
     ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", help="Suppress banners and status messages."),
+    ] = False,
 ) -> None:
     """Create a starter repo-doc.toml for this repository."""
-    _print_banner("init")
+    _print_banner("init", quiet=quiet)
     resolved_root = repo_root.resolve()
     target = config_file or resolved_root / "repo-doc.toml"
 
     if target.exists() and not force:
-        log_console.print(
-            f"[yellow]{target} already exists. Use --force to overwrite it.[/yellow]"
-        )
+        if not quiet:
+            log_console.print(
+                f"[yellow]{target} already exists. Use --force to overwrite it.[/yellow]"
+            )
         raise typer.Exit(code=1)
 
     allowed_paths = allowed_doc_path or _detect_allowed_doc_paths(resolved_root)
@@ -406,8 +418,11 @@ def init(
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(rendered, encoding="utf-8")
 
-    log_console.print(f"[green]Created repo-doc configuration:[/green] {target}")
-    console.print(Syntax(rendered.rstrip(), "toml", word_wrap=True))
+    if not quiet:
+        log_console.print(f"[green]Created repo-doc configuration:[/green] {target}")
+        console.print(Syntax(rendered.rstrip(), "toml", word_wrap=True))
+    else:
+        sys.stdout.write(rendered)
 
 
 @app.command()
@@ -475,10 +490,14 @@ def analyse(
         ),
     ] = "json",
     output: Annotated[Path | None, typer.Option(help="Optional output file.")] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", help="Suppress banners and status messages."),
+    ] = False,
 ) -> None:
     """Analyse Git changes and produce a bounded documentation proposal."""
-    _print_banner("analyse")
-    with _step("Loading configuration"):
+    _print_banner("analyse", quiet=quiet)
+    with _step("Loading configuration", quiet=quiet):
         settings, _project_config = _settings_from_inputs(
             repo_root=repo_root,
             config_file=config_file,
@@ -492,31 +511,36 @@ def analyse(
         staged=staged,
         base=base,
         mock=mock,
+        quiet=quiet,
     )
     _print_and_write_result(result, output, output_format)
 
     if apply:
         if result.status != "ok" or result.proposal.action != "update":
-            log_console.print(
-                "[yellow]Documentation changes were not applied because the result is not "
-                "a safe update proposal.[/yellow]"
-            )
+            if not quiet:
+                log_console.print(
+                    "[yellow]Documentation changes were not applied because the result is not "
+                    "a safe update proposal.[/yellow]"
+                )
             raise typer.Exit(code=1)
 
-        with _step("Applying documentation changes"):
+        with _step("Applying documentation changes", quiet=quiet):
             applied_paths = apply_documentation_proposal(
                 proposal=result.proposal,
                 repository_root=repo_root.resolve(),
                 allowed_paths=settings.allowed_paths,
             )
         if not applied_paths:
-            log_console.print(
-                "[yellow]No documentation files changed; proposed content already exists.[/yellow]"
-            )
+            if not quiet:
+                log_console.print(
+                    "[yellow]No documentation files changed; proposed content already "
+                    "exists.[/yellow]"
+                )
             return
 
-        for path in applied_paths:
-            log_console.print(f"[green]Applied documentation update:[/green] {path}")
+        if not quiet:
+            for path in applied_paths:
+                log_console.print(f"[green]Applied documentation update:[/green] {path}")
 
 
 @app.command()
@@ -577,10 +601,14 @@ def check(
         ),
     ] = "json",
     output: Annotated[Path | None, typer.Option(help="Optional output file.")] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", help="Suppress banners and status messages."),
+    ] = False,
 ) -> None:
     """CI-friendly documentation gate for Git changes."""
-    _print_banner("check")
-    with _step("Loading configuration"):
+    _print_banner("check", quiet=quiet)
+    with _step("Loading configuration", quiet=quiet):
         settings, project_config = _settings_from_inputs(
             repo_root=repo_root,
             config_file=config_file,
@@ -595,22 +623,27 @@ def check(
         staged=staged,
         base=effective_base,
         mock=mock,
+        quiet=quiet,
     )
     _print_and_write_result(result, output, output_format)
 
     if result.status == "ok" and result.proposal.action == "no_change":
-        log_console.print("[green]No documentation update required.[/green]")
+        if not quiet:
+            log_console.print("[green]No documentation update required.[/green]")
         return
 
     if result.status == "ok" and result.proposal.action == "update":
-        log_console.print("[red]Documentation updates are needed.[/red]")
+        if not quiet:
+            log_console.print("[red]Documentation updates are needed.[/red]")
         raise typer.Exit(code=2)
 
     if result.status == "human_review":
-        log_console.print("[yellow]Documentation check requires human review.[/yellow]")
+        if not quiet:
+            log_console.print("[yellow]Documentation check requires human review.[/yellow]")
         raise typer.Exit(code=3)
 
-    log_console.print("[red]Documentation check was blocked by a safety gate.[/red]")
+    if not quiet:
+        log_console.print("[red]Documentation check was blocked by a safety gate.[/red]")
     raise typer.Exit(code=4)
 
 
@@ -640,10 +673,14 @@ def doctor(
             help="Allow repo-doc to read, create, and update AGENTS.md.",
         ),
     ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", help="Suppress banners and status messages."),
+    ] = False,
 ) -> None:
     """Validate local configuration without calling a model."""
-    _print_banner("doctor")
-    with _step("Loading configuration"):
+    _print_banner("doctor", quiet=quiet)
+    with _step("Loading configuration", quiet=quiet):
         settings, project_config = _settings_from_inputs(
             repo_root=repo_root,
             config_file=config_file,

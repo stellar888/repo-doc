@@ -20,7 +20,7 @@ local validation, and `agent-json` for machine-readable decisions.
 2. Check the current work:
 
    ```bash
-   repo-doc check --format agent-json --output repo-doc-agent.json
+   repo-doc check --format agent-json --quiet --output repo-doc-agent.json
    ```
 
 3. Read `repo-doc-agent.json` and branch on `next_action`:
@@ -78,25 +78,25 @@ repo-doc --help
 Run against staged changes:
 
 ```bash
-repo-doc check --staged --format agent-json --output repo-doc-agent.json
+repo-doc check --staged --format agent-json --quiet --output repo-doc-agent.json
 ```
 
 Run against a base branch:
 
 ```bash
-repo-doc check --base origin/main --format agent-json --output repo-doc-agent.json
+repo-doc check --base origin/main --format agent-json --quiet --output repo-doc-agent.json
 ```
 
 Run from another working directory:
 
 ```bash
-repo-doc check --repo-root /path/to/repo --format agent-json --output repo-doc-agent.json
+repo-doc check --repo-root /path/to/repo --format agent-json --quiet --output repo-doc-agent.json
 ```
 
 Allow `AGENTS.md` as documentation:
 
 ```bash
-repo-doc check --include-agents-doc --format agent-json --output repo-doc-agent.json
+repo-doc check --include-agents-doc --format agent-json --quiet --output repo-doc-agent.json
 ```
 
 ## Expected Agent Behavior

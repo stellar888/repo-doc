@@ -42,7 +42,7 @@ For deterministic local repo-doc runs:
 
 ```bash
 .venv/bin/repo-doc analyse --diff-file examples/api-change.diff --mock
-.venv/bin/repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json
+.venv/bin/repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json --quiet
 ```
 
 Avoid live OpenAI calls unless the user explicitly wants model-backed behavior verified.
@@ -72,7 +72,7 @@ Avoid live OpenAI calls unless the user explicitly wants model-backed behavior v
 Use `agent-json` when another agent needs to consume repo-doc output:
 
 ```bash
-repo-doc check --format agent-json --output repo-doc-agent.json
+repo-doc check --format agent-json --quiet --output repo-doc-agent.json
 ```
 
 Branch on:
