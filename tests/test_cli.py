@@ -16,7 +16,7 @@ def test_version_option_reports_package_version() -> None:
     result = runner.invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert "repo-doc 0.4.0" in result.output
+    assert "repo-doc 0.4.1" in result.output
 
 
 def test_init_creates_detected_project_config(tmp_path: Path) -> None:

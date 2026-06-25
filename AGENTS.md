@@ -45,6 +45,12 @@ For deterministic local repo-doc runs:
 .venv/bin/repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json --quiet
 ```
 
+For Promptfoo black-box contract checks:
+
+```bash
+PROMPTFOO_PYTHON=.venv/bin/python npx --yes promptfoo@latest eval -c evals/promptfooconfig.yaml
+```
+
 Avoid live OpenAI calls unless the user explicitly wants model-backed behavior verified.
 
 ## Important Files
@@ -55,8 +61,8 @@ Avoid live OpenAI calls unless the user explicitly wants model-backed behavior v
 - `src/repo_doc_agent/security.py`: prompt-injection, secret, and path validation.
 - `src/repo_doc_agent/prompts.py`: versioned system and task prompts.
 - `src/repo_doc_agent/schemas.py`: structured model and result contracts.
-- `tests/`: regression tests for CLI, graph, and security invariants.
-- `evals/`: Promptfoo black-box scenarios.
+- `tests/`: regression tests for CLI, graph, Promptfoo provider, and security invariants.
+- `evals/`: Promptfoo black-box scenarios for the `agent-json` contract.
 
 ## Safety Expectations
 

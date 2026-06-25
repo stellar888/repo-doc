@@ -75,6 +75,12 @@ repo-doc --version
 repo-doc --help
 ```
 
+Run Promptfoo contract evaluations:
+
+```bash
+PROMPTFOO_PYTHON=.venv/bin/python npx --yes promptfoo@latest eval -c evals/promptfooconfig.yaml
+```
+
 Run against staged changes:
 
 ```bash

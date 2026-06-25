@@ -255,13 +255,16 @@ repo-doc --help
 Run Promptfoo evaluations:
 
 ```bash
-npx promptfoo@latest eval -c evals/promptfooconfig.yaml \
+npx --yes promptfoo@latest eval -c evals/promptfooconfig.yaml \
   -o artifacts/promptfoo.json \
   -o artifacts/promptfoo.html
 ```
 
 Promptfoo invokes the application through a Python provider, meaning it evaluates the complete
-graph rather than merely evaluating an isolated prompt.
+graph rather than merely evaluating an isolated prompt. If you use a local virtualenv, set
+`PROMPTFOO_PYTHON=.venv/bin/python` so Promptfoo starts the provider with the same dependencies.
+The deterministic suite emits and asserts the `agent-json` contract, including routing for API
+docs, README configuration docs, `AGENTS.md`, human review, and safety blocking.
 
 ## Production improvements
 

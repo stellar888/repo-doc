@@ -57,7 +57,7 @@ jobs:
         if: inputs.run_promptfoo
         run: |
           mkdir -p artifacts
-          npx promptfoo@latest eval \
+          npx --yes promptfoo@latest eval \
             -c evals/promptfooconfig.yaml \
             -o artifacts/promptfoo.json \
             -o artifacts/promptfoo.html \
