@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.syntax import Syntax
 
 from .config import ProjectConfig, Settings, apply_project_config, load_project_config
@@ -16,6 +18,8 @@ from .documentation import apply_documentation_proposal
 from .graph import run_agent
 from .model import MockStructuredModel, OpenAIStructuredModel
 from .schemas import AgentResult
+
+OutputFormat = Literal["json", "markdown", "rich"]
 
 app = typer.Typer(no_args_is_help=True)
 console = Console()
@@ -132,13 +136,96 @@ def _run_analysis(
         )
 
 
-def _print_and_write_result(result: AgentResult, output: Path | None) -> None:
-    rendered = result.model_dump_json(indent=2)
-    console.print(Syntax(rendered, "json", word_wrap=True))
+def _render_markdown_result(result: AgentResult) -> str:
+    lines = [
+        "# repo-doc Preview",
+        "",
+        f"- **Status:** `{result.status}`",
+        f"- **Action:** `{result.proposal.action}`",
+        f"- **Model:** `{result.model}`",
+        f"- **Prompt version:** `{result.prompt_version}`",
+        "",
+        "## Summary",
+        "",
+        result.proposal.summary or result.analysis.summary,
+        "",
+        "## Findings",
+        "",
+    ]
+
+    if result.analysis.findings:
+        lines.extend([
+            "| Category | Confidence | Evidence |",
+            "|---|---:|---|",
+        ])
+        for finding in result.analysis.findings:
+            evidence = finding.evidence.replace("|", "\\|").replace("\n", " ")
+            lines.append(f"| `{finding.category}` | {finding.confidence:.2f} | {evidence} |")
+    else:
+        lines.append("No findings were reported.")
+
+    lines.extend(["", "## Candidate Files", ""])
+    if result.analysis.candidate_files:
+        lines.extend(f"- `{path}`" for path in result.analysis.candidate_files)
+    else:
+        lines.append("No candidate documentation files were selected.")
+
+    lines.extend(["", "## Proposed Edits", ""])
+    if result.proposal.edits:
+        for edit in result.proposal.edits:
+            lines.extend(
+                [
+                    f"### `{edit.path}`",
+                    "",
+                    f"**Rationale:** {edit.rationale}",
+                    "",
+                    "```markdown",
+                    edit.proposed_markdown.rstrip(),
+                    "```",
+                ]
+            )
+            if edit.unified_diff:
+                lines.extend(["", "```diff", edit.unified_diff.rstrip(), "```"])
+            lines.append("")
+    else:
+        lines.append("No documentation edits were proposed.")
+
+    if result.proposal.reviewer_notes:
+        lines.extend(["", "## Reviewer Notes", ""])
+        lines.extend(f"- {note}" for note in result.proposal.reviewer_notes)
+
+    if result.safety_flags:
+        lines.extend(["", "## Safety Flags", ""])
+        lines.extend(f"- `{flag}`" for flag in result.safety_flags)
+
+    if result.analysis.uncertainty:
+        lines.extend(["", "## Uncertainty", "", result.analysis.uncertainty])
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_result(result: AgentResult, output_format: OutputFormat) -> str:
+    if output_format == "json":
+        return result.model_dump_json(indent=2) + "\n"
+    return _render_markdown_result(result)
+
+
+def _print_and_write_result(
+    result: AgentResult,
+    output: Path | None,
+    output_format: OutputFormat,
+) -> None:
+    rendered = _render_result(result, output_format)
+    if output_format == "json":
+        console.print(Syntax(rendered.rstrip(), "json", word_wrap=True))
+    elif output_format == "rich":
+        console.print(Markdown(rendered))
+    else:
+        sys.stdout.write(rendered)
 
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered + "\n", encoding="utf-8")
+        output.write_text(rendered, encoding="utf-8")
 
 
 @app.command()
@@ -191,7 +278,14 @@ def analyse(
             help="Write proposed documentation changes when the result is safe to apply.",
         ),
     ] = False,
-    output: Annotated[Path | None, typer.Option(help="Optional JSON output file.")] = None,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option(
+            "--format",
+            help="Output format: json, markdown, or rich terminal markdown.",
+        ),
+    ] = "json",
+    output: Annotated[Path | None, typer.Option(help="Optional output file.")] = None,
 ) -> None:
     """Analyse Git changes and produce a bounded documentation proposal."""
     _print_banner("analyse")
@@ -209,7 +303,7 @@ def analyse(
         base=base,
         mock=mock,
     )
-    _print_and_write_result(result, output)
+    _print_and_write_result(result, output, output_format)
 
     if apply:
         if result.status != "ok" or result.proposal.action != "update":
@@ -224,7 +318,7 @@ def analyse(
                 proposal=result.proposal,
                 repository_root=repo_root.resolve(),
                 allowed_paths=settings.allowed_paths,
-        )
+            )
         if not applied_paths:
             log_console.print(
                 "[yellow]No documentation files changed; proposed content already exists.[/yellow]"
@@ -278,7 +372,14 @@ def check(
         typer.Option(help="Check committed branch changes since the merge-base with this ref."),
     ] = None,
     mock: Annotated[bool, typer.Option(help="Use deterministic local model.")] = False,
-    output: Annotated[Path | None, typer.Option(help="Optional JSON output file.")] = None,
+    output_format: Annotated[
+        OutputFormat,
+        typer.Option(
+            "--format",
+            help="Output format: json, markdown, or rich terminal markdown.",
+        ),
+    ] = "json",
+    output: Annotated[Path | None, typer.Option(help="Optional output file.")] = None,
 ) -> None:
     """CI-friendly documentation gate for Git changes."""
     _print_banner("check")
@@ -297,7 +398,7 @@ def check(
         base=effective_base,
         mock=mock,
     )
-    _print_and_write_result(result, output)
+    _print_and_write_result(result, output, output_format)
 
     if result.status == "ok" and result.proposal.action == "no_change":
         log_console.print("[green]No documentation update required.[/green]")

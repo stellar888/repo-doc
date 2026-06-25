@@ -151,6 +151,28 @@ The output is JSON. The important fields are:
 The tool never commits, merges, deploys, or opens pull requests automatically. Without `--apply`,
 it only proposes changes and generates reviewable diffs.
 
+## Output formats
+
+JSON is the default because it is stable for automation:
+
+```bash
+repo-doc analyse --format json
+```
+
+For humans, generate a Markdown preview:
+
+```bash
+repo-doc analyse --format markdown --output repo-doc-preview.md
+```
+
+The Markdown report includes the status, summary, findings table, candidate files, proposed
+Markdown, generated diff, reviewer notes, and safety flags. For a nicer terminal rendering, use
+Rich-flavored Markdown output:
+
+```bash
+repo-doc analyse --format rich
+```
+
 Useful settings:
 
 - `OPENAI_MODEL`: model used by LangChain's OpenAI chat client.

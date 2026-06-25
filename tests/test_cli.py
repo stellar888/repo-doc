@@ -4,8 +4,9 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from repo_doc_agent.cli import _load_diff, app
+from repo_doc_agent.cli import _load_diff, _render_markdown_result, app
 from repo_doc_agent.config import Settings, apply_project_config, load_project_config
+from repo_doc_agent.schemas import AgentResult, DocumentationProposal, Finding, ImpactAnalysis
 
 runner = CliRunner()
 
@@ -94,3 +95,78 @@ diff --git a/src/math.py b/src/math.py
 
     assert result.exit_code == 0
     assert "No documentation update required" in result.output
+
+
+def test_render_markdown_result_includes_preview_sections() -> None:
+    result = AgentResult(
+        status="ok",
+        analysis=ImpactAnalysis(
+            needs_documentation_update=True,
+            summary="A widgets endpoint was added.",
+            candidate_files=["docs/api.md"],
+            findings=[
+                Finding(
+                    category="api_change",
+                    evidence="The diff adds /v1/widgets.",
+                    confidence=0.91,
+                )
+            ],
+        ),
+        proposal=DocumentationProposal(
+            action="update",
+            summary="Document widgets.",
+            edits=[
+                {
+                    "path": "docs/api.md",
+                    "rationale": "The endpoint is externally visible.",
+                    "proposed_markdown": "## Widgets\n\nUse `GET /v1/widgets`.",
+                    "unified_diff": "--- a/docs/api.md\n+++ b/docs/api.md\n+## Widgets\n",
+                }
+            ],
+        ),
+        safety_flags=[],
+        prompt_version="test",
+        model="mock",
+    )
+
+    rendered = _render_markdown_result(result)
+
+    assert "# repo-doc Preview" in rendered
+    assert "## Findings" in rendered
+    assert "### `docs/api.md`" in rendered
+    assert "```diff" in rendered
+
+
+def test_analyse_writes_markdown_output(tmp_path: Path) -> None:
+    diff_file = tmp_path / "change.diff"
+    output_file = tmp_path / "preview.md"
+    diff_file.write_text(
+        """
+diff --git a/src/api.py b/src/api.py
++@app.get("/v1/widgets")
++def list_widgets():
++    return {"items": []}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "analyse",
+            "--diff-file",
+            str(diff_file),
+            "--repo-root",
+            str(tmp_path),
+            "--mock",
+            "--format",
+            "markdown",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    preview = output_file.read_text(encoding="utf-8")
+    assert preview.startswith("# repo-doc Preview")
+    assert "### `docs/api.md`" in preview
