@@ -47,6 +47,14 @@ jobs:
           repo-doc init --repo-root "$RUNNER_TEMP" --config-file "$RUNNER_TEMP/repo-doc.toml" --force
           repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json --quiet
 
+      - name: Smoke test composite action
+        uses: ./
+        with:
+          diff-file: examples/no-doc-change.diff
+          mock: "true"
+          output-file: artifacts/action-repo-doc-agent.json
+          upload-artifact: "false"
+
       - name: Set up Node
         if: inputs.run_promptfoo
         uses: actions/setup-node@v4

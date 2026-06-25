@@ -154,6 +154,7 @@ You can generate the starter instead:
 
 ```bash
 repo-doc init --include-agents-doc
+repo-doc init --ci --include-agents-doc
 ```
 
 The output is JSON. The important fields are:
@@ -209,6 +210,8 @@ Useful settings:
 
 ## GitHub Actions check
 
+The easiest CI path is the bundled GitHub Action:
+
 ```yaml
 name: repo-doc
 
@@ -225,19 +228,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: stellar888/repo-doc@v0.5.0
         with:
-          python-version: "3.12"
-      - run: pip install repo-doc
-      - run: repo-doc check --base origin/main
+          base: origin/${{ github.base_ref }}
+          include-agents-doc: "true"
+          output-file: repo-doc-agent.json
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-Use mock mode for deterministic CI demos that do not need an API key:
+The action installs repo-doc, runs `repo-doc check --format agent-json --quiet`, uploads the
+result artifact by default, and exposes outputs such as `status`, `next-action`, `can-apply`, and
+`result-file`.
+
+To generate a starter workflow in another repository:
 
 ```bash
-repo-doc check --base origin/main --mock
+repo-doc init --ci --include-agents-doc
+```
+
+Use mock mode for deterministic CI demos that do not need an API key:
+
+```yaml
+- uses: stellar888/repo-doc@v0.5.0
+  with:
+    base: origin/${{ github.base_ref }}
+    mock: "true"
 ```
 
 Run tests:
@@ -255,7 +271,7 @@ repo-doc --help
 Run Promptfoo evaluations:
 
 ```bash
-npx --yes promptfoo@latest eval -c evals/promptfooconfig.yaml \
+PROMPTFOO_PYTHON=.venv/bin/python npx --yes promptfoo@latest eval -c evals/promptfooconfig.yaml \
   -o artifacts/promptfoo.json \
   -o artifacts/promptfoo.html
 ```

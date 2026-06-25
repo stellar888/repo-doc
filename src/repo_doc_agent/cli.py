@@ -35,6 +35,7 @@ BANNER = r"""
 /_/   \___/  ___/\____(_)_____\____/\___/
           /_/
 """.strip("\n")
+DEFAULT_GITHUB_ACTION_OWNER = "stellar888/repo-doc"
 
 
 @app.callback()
@@ -164,6 +165,53 @@ def _render_project_config(
         f"openai_model = {json.dumps(defaults.openai_model)}",
         "",
     ]
+    return "\n".join(lines)
+
+
+def _render_github_actions_workflow(
+    *,
+    action_ref: str,
+    output_file: str,
+    include_agents_doc: bool,
+    mock: bool,
+) -> str:
+    lines = [
+        "name: repo-doc",
+        "",
+        "on:",
+        "  pull_request:",
+        "",
+        "permissions:",
+        "  contents: read",
+        "",
+        "jobs:",
+        "  documentation:",
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - name: Check out repository",
+        "        uses: actions/checkout@v4",
+        "        with:",
+        "          fetch-depth: 0",
+        "",
+        "      - name: Run repo-doc",
+        "        id: repo-doc",
+        f"        uses: {action_ref}",
+        "        with:",
+        "          base: origin/${{ github.base_ref }}",
+        f"          output-file: {output_file}",
+    ]
+    if include_agents_doc:
+        lines.append('          include-agents-doc: "true"')
+    if mock:
+        lines.append('          mock: "true"')
+    else:
+        lines.extend(
+            [
+                "        env:",
+                "          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}",
+            ]
+        )
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -335,6 +383,26 @@ def init(
         str,
         typer.Option(help="Default base branch ref for check when --base is omitted."),
     ] = "main",
+    ci: Annotated[
+        bool,
+        typer.Option("--ci", help="Also create a starter GitHub Actions workflow."),
+    ] = False,
+    ci_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--ci-file",
+            dir_okay=False,
+            help="Optional CI workflow path. Defaults to .github/workflows/repo-doc.yml.",
+        ),
+    ] = None,
+    ci_mock: Annotated[
+        bool,
+        typer.Option("--ci-mock", help="Generate the CI workflow in deterministic mock mode."),
+    ] = False,
+    action_ref: Annotated[
+        str,
+        typer.Option(help="GitHub Action ref used by --ci generated workflows."),
+    ] = f"{DEFAULT_GITHUB_ACTION_OWNER}@v{__version__}",
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite an existing repo-doc.toml."),
@@ -348,11 +416,15 @@ def init(
     _print_banner("init", quiet=quiet)
     resolved_root = repo_root.resolve()
     target = config_file or resolved_root / "repo-doc.toml"
+    ci_target = ci_file or resolved_root / ".github" / "workflows" / "repo-doc.yml"
+    targets = [target, *([ci_target] if ci else [])]
+    existing_targets = [path for path in targets if path.exists()]
 
-    if target.exists() and not force:
+    if existing_targets and not force:
         if not quiet:
+            existing = ", ".join(str(path) for path in existing_targets)
             log_console.print(
-                f"[yellow]{target} already exists. Use --force to overwrite it.[/yellow]"
+                f"[yellow]{existing} already exists. Use --force to overwrite.[/yellow]"
             )
         raise typer.Exit(code=1)
 
@@ -366,9 +438,24 @@ def init(
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(rendered, encoding="utf-8")
 
+    workflow = ""
+    if ci:
+        workflow = _render_github_actions_workflow(
+            action_ref=action_ref,
+            output_file="repo-doc-agent.json",
+            include_agents_doc=include_agents_doc,
+            mock=ci_mock,
+        )
+        ci_target.parent.mkdir(parents=True, exist_ok=True)
+        ci_target.write_text(workflow, encoding="utf-8")
+
     if not quiet:
         log_console.print(f"[green]Created repo-doc configuration:[/green] {target}")
+        if ci:
+            log_console.print(f"[green]Created repo-doc CI workflow:[/green] {ci_target}")
         console.print(Syntax(rendered.rstrip(), "toml", word_wrap=True))
+        if ci:
+            console.print(Syntax(workflow.rstrip(), "yaml", word_wrap=True))
     else:
         sys.stdout.write(rendered)
 

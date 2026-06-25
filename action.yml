@@ -1,0 +1,202 @@
+name: repo-doc
+description: Run repo-doc as a documentation-impact gate and emit agent-json outputs.
+
+inputs:
+  python-version:
+    description: Python version used to install and run repo-doc.
+    required: false
+    default: "3.12"
+  repo-doc-version:
+    description: Optional PyPI version to install instead of the checked-out action code.
+    required: false
+    default: ""
+  repo-root:
+    description: Repository root to analyse.
+    required: false
+    default: "."
+  base:
+    description: Base ref for committed branch changes, such as origin/main.
+    required: false
+    default: ""
+  staged:
+    description: Analyse staged changes.
+    required: false
+    default: "false"
+  diff-file:
+    description: Optional saved diff file to analyse.
+    required: false
+    default: ""
+  config-file:
+    description: Optional repo-doc.toml path.
+    required: false
+    default: ""
+  allowed-doc-paths:
+    description: Comma- or newline-separated allowed documentation paths.
+    required: false
+    default: ""
+  include-agents-doc:
+    description: Allow repo-doc to create or update root-level AGENTS.md.
+    required: false
+    default: "false"
+  mock:
+    description: Use the deterministic local model.
+    required: false
+    default: "false"
+  output-file:
+    description: File where the agent-json contract should be written.
+    required: false
+    default: repo-doc-agent.json
+  fail-on:
+    description: Comma-separated outcomes that fail the job, or never.
+    required: false
+    default: documentation-needed,human-review,blocked
+  upload-artifact:
+    description: Upload the agent-json result as a workflow artifact.
+    required: false
+    default: "true"
+  artifact-name:
+    description: Artifact name for the agent-json result.
+    required: false
+    default: repo-doc-result
+
+outputs:
+  exit-code:
+    description: repo-doc check exit code.
+    value: ${{ steps.check.outputs.exit-code }}
+  status:
+    description: agent-json status.
+    value: ${{ steps.check.outputs.status }}
+  action:
+    description: agent-json action.
+    value: ${{ steps.check.outputs.action }}
+  next-action:
+    description: agent-json next_action.
+    value: ${{ steps.check.outputs.next-action }}
+  can-apply:
+    description: agent-json can_apply value.
+    value: ${{ steps.check.outputs.can-apply }}
+  result-file:
+    description: Path to the written agent-json file.
+    value: ${{ steps.check.outputs.result-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install repo-doc
+      shell: bash
+      run: |
+        set -euo pipefail
+        python -m pip install --upgrade pip
+        if [ -n "${{ inputs.repo-doc-version }}" ]; then
+          python -m pip install "repo-doc==${{ inputs.repo-doc-version }}"
+        else
+          python -m pip install "$GITHUB_ACTION_PATH"
+        fi
+        repo-doc --version
+
+    - name: Run repo-doc check
+      id: check
+      shell: bash
+      env:
+        REPO_DOC_REPO_ROOT: ${{ inputs.repo-root }}
+        REPO_DOC_BASE: ${{ inputs.base }}
+        REPO_DOC_STAGED: ${{ inputs.staged }}
+        REPO_DOC_DIFF_FILE: ${{ inputs.diff-file }}
+        REPO_DOC_CONFIG_FILE: ${{ inputs.config-file }}
+        REPO_DOC_ALLOWED_DOC_PATHS: ${{ inputs.allowed-doc-paths }}
+        REPO_DOC_INCLUDE_AGENTS_DOC: ${{ inputs.include-agents-doc }}
+        REPO_DOC_MOCK: ${{ inputs.mock }}
+        REPO_DOC_OUTPUT_FILE: ${{ inputs.output-file }}
+        REPO_DOC_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        set -euo pipefail
+
+        cmd=(
+          repo-doc check
+          --repo-root "$REPO_DOC_REPO_ROOT"
+          --format agent-json
+          --quiet
+          --output "$REPO_DOC_OUTPUT_FILE"
+        )
+
+        if [ -n "$REPO_DOC_BASE" ]; then
+          cmd+=(--base "$REPO_DOC_BASE")
+        fi
+        if [ "$REPO_DOC_STAGED" = "true" ]; then
+          cmd+=(--staged)
+        fi
+        if [ -n "$REPO_DOC_DIFF_FILE" ]; then
+          cmd+=(--diff-file "$REPO_DOC_DIFF_FILE")
+        fi
+        if [ -n "$REPO_DOC_CONFIG_FILE" ]; then
+          cmd+=(--config-file "$REPO_DOC_CONFIG_FILE")
+        fi
+        if [ "$REPO_DOC_INCLUDE_AGENTS_DOC" = "true" ]; then
+          cmd+=(--include-agents-doc)
+        fi
+        if [ "$REPO_DOC_MOCK" = "true" ]; then
+          cmd+=(--mock)
+        fi
+
+        while IFS= read -r path; do
+          path="$(printf '%s' "$path" | xargs)"
+          if [ -n "$path" ]; then
+            cmd+=(--allowed-doc-path "$path")
+          fi
+        done <<< "$(printf '%s\n' "$REPO_DOC_ALLOWED_DOC_PATHS" | tr ',' '\n')"
+
+        set +e
+        "${cmd[@]}"
+        exit_code=$?
+        set -e
+
+        echo "exit-code=$exit_code" >> "$GITHUB_OUTPUT"
+        echo "result-file=$REPO_DOC_OUTPUT_FILE" >> "$GITHUB_OUTPUT"
+
+        if [ -f "$REPO_DOC_OUTPUT_FILE" ]; then
+          python - "$REPO_DOC_OUTPUT_FILE" >> "$GITHUB_OUTPUT" <<'PY'
+        import json
+        import sys
+
+        payload = json.loads(open(sys.argv[1], encoding="utf-8").read())
+        outputs = {
+            "status": payload.get("status", ""),
+            "action": payload.get("action", ""),
+            "next-action": payload.get("next_action", ""),
+            "can-apply": str(payload.get("can_apply", "")).lower(),
+        }
+        for key, value in outputs.items():
+            print(f"{key}={value}")
+        PY
+        fi
+
+        fail_on=",$REPO_DOC_FAIL_ON,"
+        should_fail=false
+        if [ "$REPO_DOC_FAIL_ON" = "never" ]; then
+          should_fail=false
+        elif [ "$exit_code" -eq 2 ] && [[ "$fail_on" == *",documentation-needed,"* ]]; then
+          should_fail=true
+        elif [ "$exit_code" -eq 3 ] && [[ "$fail_on" == *",human-review,"* ]]; then
+          should_fail=true
+        elif [ "$exit_code" -eq 4 ] && [[ "$fail_on" == *",blocked,"* ]]; then
+          should_fail=true
+        elif [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 2 ] && [ "$exit_code" -ne 3 ] && [ "$exit_code" -ne 4 ]; then
+          should_fail=true
+        fi
+
+        if [ "$should_fail" = "true" ]; then
+          exit "$exit_code"
+        fi
+
+    - name: Upload repo-doc result
+      if: inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.output-file }}
+        if-no-files-found: ignore

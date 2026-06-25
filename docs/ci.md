@@ -18,18 +18,31 @@ Exit codes
 Recommended GitHub Actions pattern
 
 - Ensure your checkout step fetches sufficient history so that the base branch ref (if used) can be resolved (fetch-depth: 0 is common).
-- Typical usage is to pass a base ref such as origin/main to compare the feature branch with main:
+- The bundled composite action installs repo-doc, runs check with --format agent-json --quiet, uploads the result artifact by default, and exposes action outputs for downstream jobs.
+- Typical usage is to pass a base ref such as origin/${{ github.base_ref }} on pull requests:
 
 ```yaml
-- run: repo-doc check --base origin/main
+- uses: stellar888/repo-doc@v0.5.0
+  with:
+    base: origin/${{ github.base_ref }}
+    include-agents-doc: "true"
   env:
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-- For deterministic demonstrations or when an API key is not available in the demo environment, use --mock to avoid external model calls:
+- Generate a starter workflow and repo-doc.toml:
 
 ```bash
-repo-doc check --base origin/main --mock
+repo-doc init --ci --include-agents-doc
+```
+
+- For deterministic demonstrations or when an API key is not available in the demo environment, use mock mode to avoid external model calls:
+
+```yaml
+- uses: stellar888/repo-doc@v0.5.0
+  with:
+    base: origin/${{ github.base_ref }}
+    mock: "true"
 ```
 
 Agent-friendly output

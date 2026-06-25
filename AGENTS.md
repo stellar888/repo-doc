@@ -43,6 +43,7 @@ For deterministic local repo-doc runs:
 ```bash
 .venv/bin/repo-doc analyse --diff-file examples/api-change.diff --mock
 .venv/bin/repo-doc check --diff-file examples/no-doc-change.diff --mock --format agent-json --quiet
+.venv/bin/repo-doc init --repo-root /tmp/repo-doc-init --ci --ci-mock --force
 ```
 
 For Promptfoo black-box contract checks:
@@ -56,6 +57,7 @@ Avoid live OpenAI calls unless the user explicitly wants model-backed behavior v
 ## Important Files
 
 - `src/repo_doc_agent/cli.py`: Typer CLI, output formats, config initialization.
+- `src/repo_doc_agent/contract.py`: shared `agent-json` automation contract rendering.
 - `src/repo_doc_agent/graph.py`: LangGraph workflow and safety routing.
 - `src/repo_doc_agent/documentation.py`: allowed doc reads, candidate discovery, diffs, apply logic.
 - `src/repo_doc_agent/security.py`: prompt-injection, secret, and path validation.
@@ -63,6 +65,7 @@ Avoid live OpenAI calls unless the user explicitly wants model-backed behavior v
 - `src/repo_doc_agent/schemas.py`: structured model and result contracts.
 - `tests/`: regression tests for CLI, graph, Promptfoo provider, and security invariants.
 - `evals/`: Promptfoo black-box scenarios for the `agent-json` contract.
+- `action.yml`: composite GitHub Action wrapper around `repo-doc check`.
 
 ## Safety Expectations
 

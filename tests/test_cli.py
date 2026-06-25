@@ -16,7 +16,7 @@ def test_version_option_reports_package_version() -> None:
     result = runner.invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert "repo-doc 0.4.1" in result.output
+    assert "repo-doc 0.5.0" in result.output
 
 
 def test_init_creates_detected_project_config(tmp_path: Path) -> None:
@@ -69,6 +69,43 @@ def test_init_force_overwrites_with_explicit_doc_paths(tmp_path: Path) -> None:
     config = config_file.read_text(encoding="utf-8")
     assert 'allowed_doc_paths = ["docs", "guides"]' in config
     assert 'base_branch = "origin/main"' in config
+
+
+def test_init_ci_creates_github_actions_workflow(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "--repo-root",
+            str(tmp_path),
+            "--ci",
+            "--ci-mock",
+            "--include-agents-doc",
+            "--action-ref",
+            "stellar888/repo-doc@v0.5.0",
+        ],
+    )
+
+    assert result.exit_code == 0
+    workflow = (tmp_path / ".github" / "workflows" / "repo-doc.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "uses: stellar888/repo-doc@v0.5.0" in workflow
+    assert "base: origin/${{ github.base_ref }}" in workflow
+    assert 'include-agents-doc: "true"' in workflow
+    assert 'mock: "true"' in workflow
+    assert "OPENAI_API_KEY" not in workflow
+
+
+def test_init_ci_refuses_to_overwrite_existing_workflow(tmp_path: Path) -> None:
+    workflow = tmp_path / ".github" / "workflows" / "repo-doc.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text("name: existing\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["init", "--repo-root", str(tmp_path), "--ci"])
+
+    assert result.exit_code == 1
+    assert workflow.read_text(encoding="utf-8") == "name: existing\n"
 
 
 def test_load_diff_prefers_explicit_diff_file(tmp_path: Path) -> None:

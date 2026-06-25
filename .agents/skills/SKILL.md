@@ -15,6 +15,7 @@ local validation, and `agent-json` for machine-readable decisions.
    ```bash
    repo-doc init
    repo-doc init --include-agents-doc
+   repo-doc init --ci --include-agents-doc
    ```
 
 2. Check the current work:
@@ -91,6 +92,21 @@ Run against a base branch:
 
 ```bash
 repo-doc check --base origin/main --format agent-json --quiet --output repo-doc-agent.json
+```
+
+Generate a starter GitHub Actions workflow:
+
+```bash
+repo-doc init --ci --include-agents-doc
+```
+
+Use the bundled composite action in GitHub Actions:
+
+```yaml
+- uses: stellar888/repo-doc@v0.5.0
+  with:
+    base: origin/${{ github.base_ref }}
+    include-agents-doc: "true"
 ```
 
 Run from another working directory:
