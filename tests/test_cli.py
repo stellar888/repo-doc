@@ -1,10 +1,11 @@
+import json
 from pathlib import Path
 
 import pytest
 import typer
 from typer.testing import CliRunner
 
-from repo_doc_agent.cli import _load_diff, _render_markdown_result, app
+from repo_doc_agent.cli import _load_diff, _render_agent_json_result, _render_markdown_result, app
 from repo_doc_agent.config import Settings, apply_project_config, load_project_config
 from repo_doc_agent.schemas import AgentResult, DocumentationProposal, Finding, ImpactAnalysis
 
@@ -178,6 +179,40 @@ def test_render_markdown_result_includes_preview_sections() -> None:
     assert "```diff" in rendered
 
 
+def test_render_agent_json_result_includes_agent_contract() -> None:
+    result = AgentResult(
+        status="ok",
+        analysis=ImpactAnalysis(
+            needs_documentation_update=True,
+            summary="A widgets endpoint was added.",
+            candidate_files=["docs/api.md"],
+            findings=[],
+        ),
+        proposal=DocumentationProposal(
+            action="update",
+            summary="Document widgets.",
+            edits=[
+                {
+                    "path": "docs/api.md",
+                    "rationale": "The endpoint is externally visible.",
+                    "proposed_markdown": "## Widgets\n\nUse `GET /v1/widgets`.",
+                }
+            ],
+        ),
+        safety_flags=[],
+        prompt_version="test",
+        model="mock",
+    )
+
+    payload = json.loads(_render_agent_json_result(result))
+
+    assert payload["schema_version"] == 1
+    assert payload["next_action"] == "update_documentation"
+    assert payload["check_exit_code"] == 2
+    assert payload["can_apply"] is True
+    assert payload["documentation_files"] == ["docs/api.md"]
+
+
 def test_analyse_writes_markdown_output(tmp_path: Path) -> None:
     diff_file = tmp_path / "change.diff"
     output_file = tmp_path / "preview.md"
@@ -211,3 +246,38 @@ diff --git a/src/api.py b/src/api.py
     preview = output_file.read_text(encoding="utf-8")
     assert preview.startswith("# repo-doc Preview")
     assert "### `docs/api.md`" in preview
+
+
+def test_check_writes_agent_json_output(tmp_path: Path) -> None:
+    diff_file = tmp_path / "change.diff"
+    output_file = tmp_path / "agent.json"
+    diff_file.write_text(
+        """
+diff --git a/src/math.py b/src/math.py
+-def add(a, b): return a+b
++def add(left, right): return left + right
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "check",
+            "--diff-file",
+            str(diff_file),
+            "--repo-root",
+            str(tmp_path),
+            "--mock",
+            "--format",
+            "agent-json",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(output_file.read_text(encoding="utf-8"))
+    assert payload["next_action"] == "no_documentation_change"
+    assert payload["check_exit_code"] == 0
+    assert payload["can_apply"] is False

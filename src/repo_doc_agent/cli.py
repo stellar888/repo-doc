@@ -19,7 +19,7 @@ from .graph import run_agent
 from .model import MockStructuredModel, OpenAIStructuredModel
 from .schemas import AgentResult
 
-OutputFormat = Literal["json", "markdown", "rich"]
+OutputFormat = Literal["json", "agent-json", "markdown", "rich"]
 
 app = typer.Typer(no_args_is_help=True)
 console = Console()
@@ -207,9 +207,56 @@ def _render_markdown_result(result: AgentResult) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _agent_next_action(result: AgentResult) -> str:
+    if result.status == "blocked":
+        return "stop_for_safety_review"
+    if result.status == "human_review" or result.proposal.action == "human_review":
+        return "request_human_review"
+    if result.proposal.action == "update":
+        return "update_documentation"
+    return "no_documentation_change"
+
+
+def _check_exit_code(result: AgentResult) -> int:
+    if result.status == "ok" and result.proposal.action == "no_change":
+        return 0
+    if result.status == "ok" and result.proposal.action == "update":
+        return 2
+    if result.status == "human_review":
+        return 3
+    return 4
+
+
+def _render_agent_json_result(result: AgentResult) -> str:
+    edit_paths = [edit.path for edit in result.proposal.edits]
+    can_apply = result.status == "ok" and result.proposal.action == "update"
+    payload = {
+        "schema_version": 1,
+        "status": result.status,
+        "action": result.proposal.action,
+        "next_action": _agent_next_action(result),
+        "check_exit_code": _check_exit_code(result),
+        "needs_documentation_update": result.analysis.needs_documentation_update,
+        "can_apply": can_apply,
+        "apply_command": "repo-doc analyse --apply" if can_apply else None,
+        "summary": result.proposal.summary or result.analysis.summary,
+        "candidate_files": result.analysis.candidate_files,
+        "edit_paths": edit_paths,
+        "documentation_files": edit_paths or result.analysis.candidate_files,
+        "safety_flags": result.safety_flags,
+        "reviewer_notes": result.proposal.reviewer_notes,
+        "uncertainty": result.analysis.uncertainty,
+        "model": result.model,
+        "prompt_version": result.prompt_version,
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
+
 def _render_result(result: AgentResult, output_format: OutputFormat) -> str:
     if output_format == "json":
         return result.model_dump_json(indent=2) + "\n"
+    if output_format == "agent-json":
+        return _render_agent_json_result(result)
     return _render_markdown_result(result)
 
 
@@ -221,6 +268,8 @@ def _print_and_write_result(
     rendered = _render_result(result, output_format)
     if output_format == "json":
         console.print(Syntax(rendered.rstrip(), "json", word_wrap=True))
+    elif output_format == "agent-json":
+        sys.stdout.write(rendered)
     elif output_format == "rich":
         console.print(Markdown(rendered))
     else:
@@ -292,7 +341,7 @@ def analyse(
         OutputFormat,
         typer.Option(
             "--format",
-            help="Output format: json, markdown, or rich terminal markdown.",
+            help="Output format: json, agent-json, markdown, or rich terminal markdown.",
         ),
     ] = "json",
     output: Annotated[Path | None, typer.Option(help="Optional output file.")] = None,
@@ -394,7 +443,7 @@ def check(
         OutputFormat,
         typer.Option(
             "--format",
-            help="Output format: json, markdown, or rich terminal markdown.",
+            help="Output format: json, agent-json, markdown, or rich terminal markdown.",
         ),
     ] = "json",
     output: Annotated[Path | None, typer.Option(help="Optional output file.")] = None,

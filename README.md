@@ -167,6 +167,16 @@ JSON is the default because it is stable for automation:
 repo-doc analyse --format json
 ```
 
+For coding agents and automation, emit the compact action contract:
+
+```bash
+repo-doc check --format agent-json
+```
+
+`agent-json` includes `next_action`, `check_exit_code`, `can_apply`, candidate files, edit paths,
+safety flags, reviewer notes, model metadata, and the prompt version. Use it when another agent
+needs to decide whether to continue, update docs, or stop for review.
+
 For humans, generate a Markdown preview:
 
 ```bash
