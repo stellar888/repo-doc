@@ -182,6 +182,27 @@ def test_existing_documentation_context_is_supplied(tmp_path) -> None:
     assert "+## Widgets" in result.proposal.edits[0].unified_diff
 
 
+def test_truncated_documentation_context_requires_human_review(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "api.md").write_text("# Existing API docs\n\n" + ("Details.\n" * 20), encoding="utf-8")
+
+    result = run_agent(
+        diff="+@app.get('/v1/widgets')",
+        settings=Settings(
+            openai_api_key=None,
+            allowed_doc_dirs="docs,README.md",
+            max_doc_chars=12,
+            repository_root=str(tmp_path),
+        ),
+        model=ContextAwareModel(),
+    )
+
+    assert result.status == "human_review"
+    assert result.proposal.action == "human_review"
+    assert "documentation_context_truncated:docs/api.md" in result.safety_flags
+
+
 class MissingCandidateModel(ContextAwareModel):
     def invoke_structured(
         self,

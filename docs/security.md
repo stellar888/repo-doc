@@ -5,6 +5,7 @@
 - Secret-like diff input blocks the run before model execution.
 - Existing documentation is read only from configured allowed paths.
 - Secret-like existing documentation content is redacted before model execution.
+- Truncated documentation context requires human review before applying changes.
 - The model has no shell, network, GitHub, or secrets tool.
 - Output is constrained using Pydantic schemas.
 - Proposed paths must stay inside configured documentation paths.

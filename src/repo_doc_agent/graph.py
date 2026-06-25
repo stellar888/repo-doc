@@ -109,6 +109,8 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
                     context = context.model_copy(
                         update={"content": "[REDACTED: possible secret-like value detected]"}
                     )
+                if context.truncated:
+                    flags.append(f"documentation_context_truncated:{path}")
                 contexts.append(context)
             except PermissionError:
                 flags.append(f"forbidden_candidate_path:{path}")
@@ -183,8 +185,14 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
             )
             for flag in flags
         )
-        suspicious = any(
-            flag.startswith(("suspicious_input:", "possible_secret_in_documentation:"))
+        review_required = any(
+            flag.startswith(
+                (
+                    "suspicious_input:",
+                    "possible_secret_in_documentation:",
+                    "documentation_context_truncated:",
+                )
+            )
             for flag in flags
         )
 
@@ -195,11 +203,11 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
                 summary="The proposal failed a deterministic safety gate.",
                 reviewer_notes=flags,
             )
-        elif suspicious:
+        elif review_required:
             status = "human_review"
             proposal = DocumentationProposal(
                 action="human_review",
-                summary="Suspicious repository content requires human review.",
+                summary="Repository context requires human review before applying documentation.",
                 reviewer_notes=list(dict.fromkeys([*flags, *proposal.reviewer_notes])),
             )
         elif proposal.action == "human_review":
