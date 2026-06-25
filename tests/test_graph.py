@@ -182,6 +182,57 @@ def test_existing_documentation_context_is_supplied(tmp_path) -> None:
     assert "+## Widgets" in result.proposal.edits[0].unified_diff
 
 
+class MissingCandidateModel(ContextAwareModel):
+    def invoke_structured(
+        self,
+        *,
+        system: str,
+        user: str,
+        schema: type[BaseModel],
+    ) -> BaseModel:
+        if schema is ImpactAnalysis:
+            return ImpactAnalysis(
+                needs_documentation_update=True,
+                summary="A widgets endpoint was added.",
+                candidate_files=[],
+                findings=[
+                    Finding(
+                        category="api_change",
+                        evidence="The diff adds /v1/widgets.",
+                        confidence=0.9,
+                    )
+                ],
+                uncertainty=None,
+            )
+        return super().invoke_structured(system=system, user=user, schema=schema)
+
+
+def test_documentation_discovery_supplies_missing_model_candidates(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "api.md").write_text("# Existing API docs\n", encoding="utf-8")
+    model = MissingCandidateModel()
+
+    result = run_agent(
+        diff="""
+diff --git a/src/api.py b/src/api.py
++@app.get("/v1/widgets")
++def list_widgets():
++    return {"items": []}
+""",
+        settings=Settings(
+            openai_api_key=None,
+            allowed_doc_dirs="docs,README.md",
+            repository_root=str(tmp_path),
+        ),
+        model=model,
+    )
+
+    assert result.status == "ok"
+    assert result.analysis.candidate_files == ["docs/api.md"]
+    assert "Existing API docs" in model.proposal_prompt
+
+
 class ForbiddenCandidateModel(ContextAwareModel):
     def invoke_structured(
         self,

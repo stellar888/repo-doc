@@ -31,7 +31,7 @@ deterministic:
 1. Validate and truncate the incoming diff.
 2. Detect suspicious prompt-injection-like content.
 3. Ask the model for structured impact analysis.
-4. Read only candidate documentation files inside approved paths.
+4. Merge model-selected documentation paths with repository-discovered candidates.
 5. Ask the model for a bounded documentation proposal using that context.
 6. Generate unified diffs from trusted application code.
 7. Apply deterministic path, schema, and content checks.
@@ -243,7 +243,7 @@ graph rather than merely evaluating an isolated prompt.
 
 ## Production improvements
 
-- Replace model-selected document paths with repository-aware search or embeddings.
+- Add embeddings or richer repository indexing for large documentation sets.
 - Use a GitHub App instead of a broadly scoped personal token.
 - Add a model gateway, tracing, cost budgets, and audit storage.
 - Add human-labelled evaluation cases from production incidents.

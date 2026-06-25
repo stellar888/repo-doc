@@ -6,7 +6,11 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from .config import Settings
-from .documentation import attach_unified_diffs, read_documentation
+from .documentation import (
+    attach_unified_diffs,
+    discover_documentation_candidates,
+    read_documentation,
+)
 from .model import StructuredModel
 from .prompts import ANALYSIS_TEMPLATE, PROMPT_VERSION, PROPOSAL_TEMPLATE, SYSTEM_POLICY
 from .schemas import AgentResult, DocumentationContext, DocumentationProposal, ImpactAnalysis
@@ -81,8 +85,18 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
         flags = list(state.get("safety_flags", []))
         contexts: list[DocumentationContext] = []
         repository_root = Path(settings.repository_root)
+        analysis = state["analysis"]
+        discovered_candidates = discover_documentation_candidates(
+            diff=state["diff"],
+            repository_root=repository_root,
+            allowed_paths=allowed,
+        )
+        candidate_files = list(
+            dict.fromkeys([*analysis.candidate_files, *discovered_candidates])
+        )[:10]
+        analysis = analysis.model_copy(update={"candidate_files": candidate_files})
 
-        for path in state["analysis"].candidate_files:
+        for path in candidate_files:
             try:
                 context = read_documentation(
                     path=path,
@@ -102,6 +116,7 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
                 flags.append(f"unreadable_candidate_path:{path}:{type(exc).__name__}")
 
         return {
+            "analysis": analysis,
             "documentation_contexts": contexts,
             "safety_flags": list(dict.fromkeys(flags)),
         }

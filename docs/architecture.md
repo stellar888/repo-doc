@@ -50,9 +50,10 @@ no_change           read_docs
              END
 ```
 
-Each node has a narrow contract. Conditional routing is based on parsed state, documentation reads
-are limited to configured paths, generated patches come from trusted application code, and every
-terminal path passes through deterministic validation.
+Each node has a narrow contract. Conditional routing is based on parsed state. When documentation
+is needed, repo-doc merges model-selected paths with deterministic candidates discovered from
+allowed Markdown files, then reads only configured paths. Generated patches come from trusted
+application code, and every terminal path passes through deterministic validation.
 
 ## Why LangGraph?
 

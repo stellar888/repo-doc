@@ -1,10 +1,138 @@
 from __future__ import annotations
 
 import difflib
+import re
 from pathlib import Path, PurePosixPath
 
 from .schemas import DocumentationContext, DocumentationProposal
 from .security import path_is_allowed
+
+TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
+DIFF_PATH_PATTERN = re.compile(r"^diff --git a/(.+?) b/(.+)$")
+
+
+def _tokens(text: str) -> set[str]:
+    return {
+        match.group(0).lower()
+        for match in TOKEN_PATTERN.finditer(text)
+        if len(match.group(0)) > 1
+    }
+
+
+def _changed_paths(diff: str) -> list[str]:
+    paths: list[str] = []
+    for line in diff.splitlines():
+        match = DIFF_PATH_PATTERN.match(line)
+        if match:
+            paths.extend([match.group(1), match.group(2)])
+        elif line.startswith(("--- a/", "+++ b/")):
+            paths.append(line[6:])
+    return list(dict.fromkeys(path for path in paths if path != "/dev/null"))
+
+
+def _iter_allowed_markdown_paths(
+    *,
+    repository_root: Path,
+    allowed_paths: tuple[str, ...],
+) -> list[str]:
+    root = repository_root.resolve()
+    discovered: list[str] = []
+
+    for allowed in allowed_paths:
+        if not path_is_allowed(allowed, allowed_paths):
+            continue
+
+        allowed_path = _safe_repo_path(root, allowed)
+        if allowed.endswith(".md"):
+            discovered.append(str(PurePosixPath(allowed)))
+            continue
+
+        if not allowed_path.exists() or not allowed_path.is_dir():
+            continue
+
+        for markdown_path in sorted(allowed_path.rglob("*.md")):
+            if not markdown_path.is_file():
+                continue
+            relative = markdown_path.relative_to(root).as_posix()
+            if path_is_allowed(relative, allowed_paths):
+                discovered.append(relative)
+
+    return list(dict.fromkeys(discovered))
+
+
+def _documentation_heading_tokens(path: Path) -> set[str]:
+    try:
+        headings = [
+            line.lstrip("#").strip()
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.startswith("#")
+        ]
+    except (OSError, UnicodeError):
+        return set()
+    return _tokens(" ".join(headings))
+
+
+def _score_documentation_path(
+    *,
+    path: str,
+    repository_root: Path,
+    diff_tokens: set[str],
+    changed_path_tokens: set[str],
+) -> int:
+    path_tokens = _tokens(path)
+    score = 0
+    score += len(path_tokens & changed_path_tokens) * 6
+    score += len(path_tokens & diff_tokens) * 2
+
+    lower_path = path.lower()
+    if "api" in diff_tokens and "api" in path_tokens:
+        score += 8
+    if diff_tokens & {"endpoint", "route", "request", "response", "status", "v1"}:
+        if "api" in path_tokens:
+            score += 6
+    if diff_tokens & {"config", "configuration", "environment", "variable", "setting"}:
+        if path_tokens & {"config", "configuration", "readme"}:
+            score += 6
+    if diff_tokens & {"agent", "agents", "codex", "workflow", "guidance"}:
+        if lower_path == "agents.md":
+            score += 8
+
+    target = _safe_repo_path(repository_root, path)
+    if target.exists() and target.is_file():
+        heading_tokens = _documentation_heading_tokens(target)
+        score += len(heading_tokens & diff_tokens) * 3
+        score += len(heading_tokens & changed_path_tokens) * 4
+
+    return score
+
+
+def discover_documentation_candidates(
+    *,
+    diff: str,
+    repository_root: Path,
+    allowed_paths: tuple[str, ...],
+    limit: int = 5,
+) -> list[str]:
+    """Find likely Markdown files before asking the model to write a proposal."""
+    root = repository_root.resolve()
+    diff_tokens = _tokens(diff)
+    changed_path_tokens: set[str] = set()
+    for path in _changed_paths(diff):
+        changed_path_tokens.update(_tokens(path))
+
+    scored: list[tuple[int, str]] = []
+    for path in _iter_allowed_markdown_paths(repository_root=root, allowed_paths=allowed_paths):
+        score = _score_documentation_path(
+            path=path,
+            repository_root=root,
+            diff_tokens=diff_tokens,
+            changed_path_tokens=changed_path_tokens,
+        )
+        if score > 0:
+            scored.append((score, path))
+
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [path for _, path in scored[:limit]]
 
 
 def _safe_repo_path(repository_root: Path, relative_path: str) -> Path:

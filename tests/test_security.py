@@ -1,6 +1,10 @@
 import pytest
 
-from repo_doc_agent.documentation import apply_documentation_proposal, read_documentation
+from repo_doc_agent.documentation import (
+    apply_documentation_proposal,
+    discover_documentation_candidates,
+    read_documentation,
+)
 from repo_doc_agent.schemas import DocumentationProposal
 from repo_doc_agent.security import path_is_allowed, scan_untrusted_text
 
@@ -49,6 +53,26 @@ def test_read_documentation_caps_content(tmp_path) -> None:
     assert context.exists
     assert context.truncated
     assert context.content == "abc"
+
+
+def test_discovers_documentation_candidates_from_diff_and_headings(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "api.md").write_text("# API\n\nExisting endpoint docs.\n", encoding="utf-8")
+    (docs / "deployment.md").write_text("# Deployment\n", encoding="utf-8")
+
+    candidates = discover_documentation_candidates(
+        diff="""
+diff --git a/src/api.py b/src/api.py
++@app.get("/v1/widgets")
++def list_widgets():
++    return {"items": []}
+""",
+        repository_root=tmp_path,
+        allowed_paths=("docs", "README.md"),
+    )
+
+    assert candidates[0] == "docs/api.md"
 
 
 def test_apply_documentation_proposal_updates_existing_file(tmp_path) -> None:
