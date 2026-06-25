@@ -59,3 +59,23 @@ diff --git a/src/repo_doc_agent/cli.py b/src/repo_doc_agent/cli.py
     payload = json.loads(response["output"])
     assert payload["next_action"] == "update_documentation"
     assert payload["edit_paths"] == ["AGENTS.md"]
+
+
+def test_promptfoo_provider_routes_config_change_to_readme() -> None:
+    provider = _load_provider()
+
+    response = provider.call_api(
+        """
+diff --git a/src/repo_doc_agent/config.py b/src/repo_doc_agent/config.py
+-REQUEST_TIMEOUT = 30
++REQUEST_TIMEOUT = 60
++# The environment variable REPO_DOC_TIMEOUT controls this value.
+""".strip(),
+        {"config": {"mock": True, "output_format": "agent-json"}},
+        {},
+    )
+
+    payload = json.loads(response["output"])
+    assert payload["status"] == "ok"
+    assert payload["next_action"] == "update_documentation"
+    assert payload["edit_paths"] == ["README.md"]

@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5-mini"
     agent_dry_run: bool = True
     max_diff_chars: int = 40_000
-    max_doc_chars: int = 12_000
+    max_doc_chars: int = 20_000
     allowed_doc_dirs: str = "docs,README.md"
     include_agents_doc: bool = False
     repository_root: str = "."

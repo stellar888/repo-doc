@@ -196,7 +196,7 @@ allowed_doc_paths = ["docs", "README.md", "guides"]
 include_agents_doc = true
 base_branch = "main"
 max_diff_chars = 40000
-max_doc_chars = 12000
+max_doc_chars = 20000
 openai_model = "gpt-5-mini"
 ```
 
@@ -364,7 +364,7 @@ allowed_doc_paths = ["docs", "README.md", "guides"]
 include_agents_doc = true
 base_branch = "main"
 max_diff_chars = 40000
-max_doc_chars = 12000
+max_doc_chars = 20000
 openai_model = "gpt-5-mini"
 ```
 
