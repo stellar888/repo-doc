@@ -18,6 +18,9 @@ local validation, and `agent-json` for machine-readable decisions.
    repo-doc init --ci --include-agents-doc
    ```
 
+   In a blank repository, create a minimal `README.md` first and add `AGENTS.md` when the team wants
+   coding-agent guidance managed as documentation.
+
 2. Check the current work:
 
    ```bash
@@ -97,6 +100,17 @@ repo-doc check --base origin/main --format agent-json --quiet --output repo-doc-
 Generate a starter GitHub Actions workflow:
 
 ```bash
+repo-doc init --ci --include-agents-doc
+```
+
+Blank repository setup:
+
+```bash
+cat > README.md <<'EOF'
+# Project Name
+
+Briefly describe what this project does and how to use it.
+EOF
 repo-doc init --ci --include-agents-doc
 ```
 

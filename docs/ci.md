@@ -36,6 +36,16 @@ Recommended GitHub Actions pattern
 repo-doc init --ci --include-agents-doc
 ```
 
+Existing repositories usually only need the generated `repo-doc.toml` and workflow committed. Blank
+repositories should add a minimal `README.md` first, and optionally an `AGENTS.md`, before running
+`repo-doc init --ci --include-agents-doc`. The init command creates configuration and workflow
+files; it does not create the first human-owned project description.
+
+After committing the generated workflow, add `OPENAI_API_KEY` as a repository Actions secret for
+model-backed checks. GitHub does not expose repository secrets to untrusted fork pull requests by
+default, so public repositories should either use mock mode for fork PRs, run model-backed checks
+only after a trusted maintainer action, or use a separate workflow policy.
+
 - For deterministic demonstrations or when an API key is not available in the demo environment, use mock mode to avoid external model calls:
 
 ```yaml

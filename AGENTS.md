@@ -46,6 +46,10 @@ For deterministic local repo-doc runs:
 .venv/bin/repo-doc init --repo-root /tmp/repo-doc-init --ci --ci-mock --force
 ```
 
+For a blank target repository, create a minimal human-owned `README.md` and optional `AGENTS.md`
+before `repo-doc init --ci --include-agents-doc`. The init command creates config and workflow
+files, not the first project description.
+
 For Promptfoo black-box contract checks:
 
 ```bash

@@ -64,15 +64,67 @@ export OPENAI_API_KEY="..."
 repo-doc analyse --diff-file examples/api-change.diff
 ```
 
-## Use on your own repo
+## Quick Start: Existing Repo
 
-Install `repo-doc`, then run it from the repository you are changing:
+Use this path when the repository already has at least a `README.md`, `docs/`, or similar
+documentation location.
 
 ```bash
 cd /path/to/your/project
-repo-doc init
-repo-doc analyse
+python -m pip install repo-doc
+repo-doc init --ci --include-agents-doc
+repo-doc check --base main --format agent-json --quiet --output repo-doc-agent.json
 ```
+
+Commit the generated `repo-doc.toml` and `.github/workflows/repo-doc.yml`. Then add an
+`OPENAI_API_KEY` repository secret in GitHub Actions settings so PR checks can run model-backed
+analysis. For deterministic demos or repos where no secret should be used, generate the workflow
+with `--ci-mock`.
+
+```bash
+repo-doc init --ci --include-agents-doc --ci-mock
+```
+
+## Quick Start: Blank Repo
+
+Use this path when the repository has no docs and no agent guidance yet. `repo-doc init` creates
+configuration and CI workflow files; it does not invent your first project description. Add a small
+human-owned baseline first, then let repo-doc keep it from drifting.
+
+```bash
+cd /path/to/blank/project
+python -m pip install repo-doc
+
+cat > README.md <<'EOF'
+# Project Name
+
+Briefly describe what this project does, who uses it, and the main way to run or use it.
+EOF
+
+cat > AGENTS.md <<'EOF'
+# Agent Instructions
+
+Keep changes scoped, update README.md or docs/ when behavior changes, and stop for human review
+when secrets, credentials, or unclear product behavior appear in the diff.
+EOF
+
+repo-doc init --ci --include-agents-doc
+repo-doc check --base main --format agent-json --quiet --output repo-doc-agent.json
+```
+
+Commit these starter files:
+
+```bash
+git add README.md AGENTS.md repo-doc.toml .github/workflows/repo-doc.yml
+git commit -m "Add repo-doc documentation gate"
+```
+
+On GitHub, add `OPENAI_API_KEY` under repository settings, in Actions secrets. If the repository
+accepts pull requests from forks, remember that GitHub does not pass repository secrets to
+untrusted fork PRs by default; use `--ci-mock`, a trusted-run workflow, or a separate policy for
+external contributors.
+
+## Daily Use
 
 By default, this analyses both staged and unstaged changes by combining `git diff --cached` and
 `git diff`. That is the most useful mode while you are developing on a branch and want to ask:
