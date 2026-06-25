@@ -46,6 +46,28 @@ diff --git a/src/math.py b/src/math.py
     assert result.proposal.action == "no_change"
 
 
+def test_agent_guidance_change_can_propose_agents_doc(tmp_path) -> None:
+    result = run_agent(
+        diff="""
+diff --git a/src/repo_doc_agent/cli.py b/src/repo_doc_agent/cli.py
++# Codex coding agent workflow guidance changed.
+""",
+        settings=Settings(
+            openai_api_key=None,
+            allowed_doc_dirs="docs,README.md",
+            include_agents_doc=True,
+            repository_root=str(tmp_path),
+        ),
+        model=MockStructuredModel(),
+    )
+
+    assert result.status == "ok"
+    assert result.proposal.action == "update"
+    assert result.analysis.candidate_files == ["AGENTS.md"]
+    assert result.proposal.edits[0].path == "AGENTS.md"
+    assert "--- a/AGENTS.md" in (result.proposal.edits[0].unified_diff or "")
+
+
 def test_prompt_injection_routes_to_human_review() -> None:
     result = run_agent(
         diff="""
@@ -60,6 +82,36 @@ diff --git a/README.md b/README.md
     assert result.proposal.action == "human_review"
     assert result.proposal.edits == []
     assert result.safety_flags
+
+
+class FailingModel:
+    model_name = "failing-test"
+
+    def invoke_structured(
+        self,
+        *,
+        system: str,
+        user: str,
+        schema: type[BaseModel],
+    ) -> BaseModel:
+        raise AssertionError("Model should not be called")
+
+
+def test_secret_like_input_blocks_before_model_execution() -> None:
+    result = run_agent(
+        diff="""
+diff --git a/config.env b/config.env
++OPENAI_API_KEY=sk-exampleSecretValue123456789
+""",
+        settings=settings(),
+        model=FailingModel(),
+    )
+
+    assert result.status == "blocked"
+    assert result.proposal.action == "human_review"
+    assert "possible_secret_in_input" in result.safety_flags
+    assert result.proposal.edits == []
+    assert result.analysis.uncertainty == "The diff was not sent to the model."
 
 
 class ContextAwareModel:

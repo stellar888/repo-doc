@@ -6,6 +6,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+AGENTS_DOC_PATH = "AGENTS.md"
+
 
 class Settings(BaseSettings):
     """Runtime settings loaded from environment variables or .env."""
@@ -18,11 +20,15 @@ class Settings(BaseSettings):
     max_diff_chars: int = 40_000
     max_doc_chars: int = 12_000
     allowed_doc_dirs: str = "docs,README.md"
+    include_agents_doc: bool = False
     repository_root: str = "."
 
     @property
     def allowed_paths(self) -> tuple[str, ...]:
-        return tuple(part.strip() for part in self.allowed_doc_dirs.split(",") if part.strip())
+        paths = [part.strip() for part in self.allowed_doc_dirs.split(",") if part.strip()]
+        if self.include_agents_doc and AGENTS_DOC_PATH not in paths:
+            paths.append(AGENTS_DOC_PATH)
+        return tuple(dict.fromkeys(paths))
 
 
 class ProjectConfig(BaseModel):
@@ -33,6 +39,7 @@ class ProjectConfig(BaseModel):
     max_diff_chars: int | None = Field(default=None, gt=0)
     max_doc_chars: int | None = Field(default=None, gt=0)
     openai_model: str | None = None
+    include_agents_doc: bool | None = None
 
 
 def load_project_config(repo_root: Path, config_file: Path | None = None) -> ProjectConfig:
@@ -60,4 +67,6 @@ def apply_project_config(settings: Settings, config: ProjectConfig) -> Settings:
         settings.max_doc_chars = config.max_doc_chars
     if config.openai_model:
         settings.openai_model = config.openai_model
+    if config.include_agents_doc is not None:
+        settings.include_agents_doc = config.include_agents_doc
     return settings

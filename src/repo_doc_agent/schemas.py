@@ -11,6 +11,7 @@ class Finding(BaseModel):
         "behaviour_change",
         "configuration_change",
         "security_change",
+        "agent_instruction_change",
         "no_doc_impact",
     ]
     evidence: str = Field(min_length=1, max_length=600)

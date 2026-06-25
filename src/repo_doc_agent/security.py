@@ -30,12 +30,16 @@ def scan_untrusted_text(text: str) -> list[str]:
 
 
 def path_is_allowed(path: str, allowed: tuple[str, ...]) -> bool:
-    normalized = str(PurePosixPath(path))
-    if normalized.startswith("../") or normalized.startswith("/"):
+    parsed = PurePosixPath(path)
+    normalized = str(parsed)
+    if ".." in parsed.parts or normalized.startswith("/"):
         return False
 
     for item in allowed:
-        candidate = str(PurePosixPath(item))
+        candidate_path = PurePosixPath(item)
+        if ".." in candidate_path.parts or str(candidate_path).startswith("/"):
+            continue
+        candidate = str(candidate_path)
         if normalized == candidate:
             return True
         if not candidate.endswith(".md") and normalized.startswith(candidate.rstrip("/") + "/"):

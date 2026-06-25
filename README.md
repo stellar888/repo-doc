@@ -129,10 +129,18 @@ repo-doc analyse \
   --allowed-doc-path guides
 ```
 
+Allow the agent to create or update root-level coding-agent guidance when a repository wants that
+as part of its docs:
+
+```bash
+repo-doc analyse --include-agents-doc
+```
+
 Or commit a `repo-doc.toml` to each repository that uses the tool:
 
 ```toml
 allowed_doc_paths = ["docs", "README.md", "guides"]
+include_agents_doc = true
 base_branch = "main"
 max_diff_chars = 40000
 max_doc_chars = 12000
@@ -177,6 +185,7 @@ Useful settings:
 
 - `OPENAI_MODEL`: model used by LangChain's OpenAI chat client.
 - `ALLOWED_DOC_DIRS`: comma-separated documentation paths the agent may read or propose edits for.
+- `INCLUDE_AGENTS_DOC`: set to `true` to include `AGENTS.md` in the allowed documentation paths.
 - `REPOSITORY_ROOT`: root used when reading existing documentation when `--repo-root` is omitted.
 - `MAX_DIFF_CHARS` and `MAX_DOC_CHARS`: input caps before model calls.
 
@@ -251,6 +260,7 @@ context it may read.
 Supported keys can be top-level or nested under `[tool."repo-doc"]`:
 
 - `allowed_doc_paths`: paths or directories the agent may read or propose edits for.
+- `include_agents_doc`: whether to also allow creating or updating root-level `AGENTS.md`.
 - `base_branch`: default branch ref for CI-oriented checks when no `--base` is provided.
 - `max_diff_chars`: maximum diff input size passed to the agent.
 - `max_doc_chars`: maximum document size the agent will read.
@@ -258,6 +268,7 @@ Supported keys can be top-level or nested under `[tool."repo-doc"]`:
 
 ```toml
 allowed_doc_paths = ["docs", "README.md", "guides"]
+include_agents_doc = true
 base_branch = "main"
 max_diff_chars = 40000
 max_doc_chars = 12000

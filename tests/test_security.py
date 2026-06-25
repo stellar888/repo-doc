@@ -11,6 +11,8 @@ def test_allowed_document_paths() -> None:
     assert path_is_allowed("README.md", allowed)
     assert not path_is_allowed("src/app.py", allowed)
     assert not path_is_allowed("../docs/api.md", allowed)
+    assert not path_is_allowed("docs/../secrets.md", allowed)
+    assert not path_is_allowed("docs/../../outside.md", allowed)
 
 
 def test_detects_injection_phrase() -> None:

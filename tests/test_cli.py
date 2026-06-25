@@ -43,6 +43,7 @@ base_branch = "main"
 max_diff_chars = 1234
 max_doc_chars = 567
 openai_model = "gpt-5-mini"
+include_agents_doc = true
 """.strip(),
         encoding="utf-8",
     )
@@ -51,9 +52,21 @@ openai_model = "gpt-5-mini"
     settings = apply_project_config(Settings(openai_api_key=None), config)
 
     assert config.base_branch == "main"
-    assert settings.allowed_paths == ("docs", "README.md", "guides")
+    assert settings.allowed_paths == ("docs", "README.md", "guides", "AGENTS.md")
     assert settings.max_diff_chars == 1234
     assert settings.max_doc_chars == 567
+    assert settings.include_agents_doc
+
+
+def test_doctor_can_include_agents_doc(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["doctor", "--repo-root", str(tmp_path), "--include-agents-doc"],
+    )
+
+    assert result.exit_code == 0
+    assert '"AGENTS.md"' in result.output
+    assert '"include_agents_doc": true' in result.output
 
 
 def test_check_exits_nonzero_when_docs_are_needed(tmp_path: Path) -> None:
@@ -95,6 +108,34 @@ diff --git a/src/math.py b/src/math.py
 
     assert result.exit_code == 0
     assert "No documentation update required" in result.output
+
+
+def test_check_can_request_agents_doc_update_when_enabled(tmp_path: Path) -> None:
+    diff_file = tmp_path / "change.diff"
+    diff_file.write_text(
+        """
+diff --git a/src/repo_doc_agent/cli.py b/src/repo_doc_agent/cli.py
++# Codex coding agent workflow guidance changed.
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "check",
+            "--diff-file",
+            str(diff_file),
+            "--repo-root",
+            str(tmp_path),
+            "--mock",
+            "--include-agents-doc",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert '"AGENTS.md"' in result.output
+    assert "Documentation updates are needed" in result.output
 
 
 def test_render_markdown_result_includes_preview_sections() -> None:

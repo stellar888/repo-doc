@@ -95,6 +95,7 @@ def _settings_from_inputs(
     repo_root: Path,
     config_file: Path | None,
     allowed_doc_path: list[str] | None,
+    include_agents_doc: bool,
 ) -> tuple[Settings, ProjectConfig]:
     resolved_root = repo_root.resolve()
     project_config = load_project_config(resolved_root, config_file)
@@ -103,6 +104,8 @@ def _settings_from_inputs(
 
     if allowed_doc_path:
         settings.allowed_doc_dirs = ",".join(allowed_doc_path)
+    if include_agents_doc:
+        settings.include_agents_doc = True
 
     return settings, project_config
 
@@ -262,6 +265,13 @@ def analyse(
             help="Allowed doc path. Repeat to override repo-doc.toml and ALLOWED_DOC_DIRS.",
         ),
     ] = None,
+    include_agents_doc: Annotated[
+        bool,
+        typer.Option(
+            "--include-agents-doc",
+            help="Allow repo-doc to read, create, and update AGENTS.md.",
+        ),
+    ] = False,
     staged: Annotated[
         bool,
         typer.Option(help="Analyse only staged changes using git diff --cached."),
@@ -294,6 +304,7 @@ def analyse(
             repo_root=repo_root,
             config_file=config_file,
             allowed_doc_path=allowed_doc_path,
+            include_agents_doc=include_agents_doc,
         )
     result = _run_analysis(
         settings=settings,
@@ -363,6 +374,13 @@ def check(
             help="Allowed doc path. Repeat to override repo-doc.toml and ALLOWED_DOC_DIRS.",
         ),
     ] = None,
+    include_agents_doc: Annotated[
+        bool,
+        typer.Option(
+            "--include-agents-doc",
+            help="Allow repo-doc to read, create, and update AGENTS.md.",
+        ),
+    ] = False,
     staged: Annotated[
         bool,
         typer.Option(help="Check only staged changes using git diff --cached."),
@@ -388,6 +406,7 @@ def check(
             repo_root=repo_root,
             config_file=config_file,
             allowed_doc_path=allowed_doc_path,
+            include_agents_doc=include_agents_doc,
         )
     effective_base = base or (None if diff_file or staged else project_config.base_branch)
     result = _run_analysis(
@@ -435,6 +454,13 @@ def doctor(
             help="Optional repo-doc.toml path. Defaults to --repo-root/repo-doc.toml.",
         ),
     ] = None,
+    include_agents_doc: Annotated[
+        bool,
+        typer.Option(
+            "--include-agents-doc",
+            help="Allow repo-doc to read, create, and update AGENTS.md.",
+        ),
+    ] = False,
 ) -> None:
     """Validate local configuration without calling a model."""
     _print_banner("doctor")
@@ -443,6 +469,7 @@ def doctor(
             repo_root=repo_root,
             config_file=config_file,
             allowed_doc_path=None,
+            include_agents_doc=include_agents_doc,
         )
     checks = {
         "python_package": "ok",
@@ -451,6 +478,7 @@ def doctor(
         "max_diff_chars": settings.max_diff_chars,
         "max_doc_chars": settings.max_doc_chars,
         "repository_root": settings.repository_root,
+        "include_agents_doc": settings.include_agents_doc,
         "openai_key_present": bool(settings.openai_api_key),
         "dry_run": settings.agent_dry_run,
     }

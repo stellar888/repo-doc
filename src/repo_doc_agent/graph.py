@@ -34,6 +34,31 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
             flags.append("input_truncated")
         return {"diff": truncated, "safety_flags": flags}
 
+    def route_after_prepare(state: AgentState) -> str:
+        if "possible_secret_in_input" in state.get("safety_flags", []):
+            return "blocked_input"
+        return "analyse"
+
+    def blocked_input(state: AgentState) -> AgentState:
+        flags = list(dict.fromkeys(state.get("safety_flags", [])))
+        return {
+            "analysis": ImpactAnalysis(
+                needs_documentation_update=False,
+                summary="Secret-like input was detected before model execution.",
+                candidate_files=[],
+                findings=[],
+                uncertainty="The diff was not sent to the model.",
+            ),
+            "proposal": DocumentationProposal(
+                action="human_review",
+                summary="Secret-like input was detected before model execution.",
+                edits=[],
+                reviewer_notes=flags,
+            ),
+            "safety_flags": flags,
+            "status": "blocked",
+        }
+
     def analyse(state: AgentState) -> AgentState:
         prompt = ANALYSIS_TEMPLATE.format(
             allowed_paths=", ".join(allowed),
@@ -171,6 +196,7 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
 
     graph = StateGraph(AgentState)
     graph.add_node("prepare", prepare)
+    graph.add_node("blocked_input", blocked_input)
     graph.add_node("analyse", analyse)
     graph.add_node("read_docs", read_docs)
     graph.add_node("no_change", no_change)
@@ -179,7 +205,12 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
     graph.add_node("validate", validate)
 
     graph.add_edge(START, "prepare")
-    graph.add_edge("prepare", "analyse")
+    graph.add_conditional_edges(
+        "prepare",
+        route_after_prepare,
+        {"blocked_input": "blocked_input", "analyse": "analyse"},
+    )
+    graph.add_edge("blocked_input", END)
     graph.add_conditional_edges(
         "analyse",
         route_after_analysis,

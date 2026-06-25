@@ -2,11 +2,12 @@
 
 - Repository content is explicitly labelled as untrusted.
 - Suspicious instructions are flagged before model execution.
+- Secret-like diff input blocks the run before model execution.
 - Existing documentation is read only from configured allowed paths.
 - Secret-like existing documentation content is redacted before model execution.
 - The model has no shell, network, GitHub, or secrets tool.
 - Output is constrained using Pydantic schemas.
-- Proposed paths must be under `docs/` or exactly `README.md`.
+- Proposed paths must stay inside configured documentation paths.
 - Secret-like output causes the run to be blocked.
 - Suspicious input causes human review.
 - Forbidden candidate documentation paths cause the run to be blocked.

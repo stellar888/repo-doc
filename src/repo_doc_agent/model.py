@@ -82,7 +82,24 @@ class MockStructuredModel:
         config_change = any(
             token in lower for token in ("environment variable", "config file", "timeout=")
         )
-        no_change = not api_change and not config_change
+        allowed_locations = ""
+        if "allowed documentation locations:" in lower_user:
+            allowed_locations = lower_user.split("allowed documentation locations:", 1)[1].split(
+                "\n\n",
+                1,
+            )[0]
+        agents_doc_allowed = "agents.md" in allowed_locations
+        agent_instruction_change = agents_doc_allowed and any(
+            token in lower
+            for token in (
+                "agents.md",
+                "agent instruction",
+                "coding agent",
+                "codex",
+                "repository guidance",
+            )
+        )
+        no_change = not api_change and not config_change and not agent_instruction_change
 
         if schema is ImpactAnalysis:
             result = ImpactAnalysis(
@@ -93,14 +110,24 @@ class MockStructuredModel:
                     else "The diff appears internal and has no clear documentation impact."
                 ),
                 candidate_files=(
-                    ["docs/api.md"]
-                    if api_change
-                    else (["README.md"] if config_change else [])
+                    ["AGENTS.md"]
+                    if agent_instruction_change
+                    else (
+                        ["docs/api.md"]
+                        if api_change
+                        else (["README.md"] if config_change else [])
+                    )
                 ),
                 findings=[
                     Finding(
-                        category="api_change" if api_change else (
-                            "configuration_change" if config_change else "no_doc_impact"
+                        category=(
+                            "agent_instruction_change"
+                            if agent_instruction_change
+                            else (
+                                "api_change"
+                                if api_change
+                                else ("configuration_change" if config_change else "no_doc_impact")
+                            )
                         ),
                         evidence=(
                             "Matched externally visible change indicators "
@@ -128,7 +155,11 @@ class MockStructuredModel:
                     summary="No externally visible documentation change was identified.",
                 )
             else:
-                path = "docs/api.md" if api_change else "README.md"
+                path = (
+                    "AGENTS.md"
+                    if agent_instruction_change
+                    else ("docs/api.md" if api_change else "README.md")
+                )
                 proposal = DocumentationProposal(
                     action="update",
                     summary="Document the externally visible behaviour change.",
@@ -137,10 +168,17 @@ class MockStructuredModel:
                             path=path,
                             rationale="The change affects users of the repository.",
                             proposed_markdown=(
-                                "## Behaviour update\n\n"
-                                "The interface has changed. Review the implementation diff and "
-                                "confirm exact request, response, and compatibility details "
-                                "before merging."
+                                "## Agent guidance\n\n"
+                                "Repository guidance for coding agents changed. Review the "
+                                "implementation diff and confirm the expected workflow before "
+                                "merging."
+                                if agent_instruction_change
+                                else (
+                                    "## Behaviour update\n\n"
+                                    "The interface has changed. Review the implementation diff and "
+                                    "confirm exact request, response, and compatibility details "
+                                    "before merging."
+                                )
                             ),
                         )
                     ],
