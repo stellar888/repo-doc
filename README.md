@@ -31,7 +31,7 @@ deterministic:
 1. Validate and truncate the incoming diff.
 2. Detect suspicious prompt-injection-like content.
 3. Ask the model for structured impact analysis.
-4. Merge model-selected documentation paths with repository-discovered candidates.
+4. Read model-selected documentation paths, or use repository-discovered candidates when needed.
 5. Ask the model for a bounded documentation proposal using that context.
 6. Generate unified diffs from trusted application code.
 7. Apply deterministic path, schema, and content checks.

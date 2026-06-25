@@ -10,6 +10,8 @@ from .security import path_is_allowed
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
 DIFF_PATH_PATTERN = re.compile(r"^diff --git a/(.+?) b/(.+)$")
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
+MIN_DISCOVERY_SCORE = 4
+README_DISCOVERY_SCORE = 8
 
 
 def _tokens(text: str) -> set[str]:
@@ -129,7 +131,8 @@ def discover_documentation_candidates(
             diff_tokens=diff_tokens,
             changed_path_tokens=changed_path_tokens,
         )
-        if score > 0:
+        required_score = README_DISCOVERY_SCORE if path == "README.md" else MIN_DISCOVERY_SCORE
+        if score >= required_score:
             scored.append((score, path))
 
     scored.sort(key=lambda item: (-item[0], item[1]))

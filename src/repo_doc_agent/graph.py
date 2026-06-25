@@ -120,7 +120,7 @@ def build_graph(*, settings: Settings, model: StructuredModel) -> Any:
             allowed_paths=allowed,
         )
         candidate_files = list(
-            dict.fromkeys([*analysis.candidate_files, *discovered_candidates])
+            dict.fromkeys(analysis.candidate_files or discovered_candidates)
         )[:10]
         analysis = analysis.model_copy(update={"candidate_files": candidate_files})
 

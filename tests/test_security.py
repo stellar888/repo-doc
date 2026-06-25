@@ -76,6 +76,23 @@ diff --git a/src/api.py b/src/api.py
     assert candidates[0] == "docs/api.md"
 
 
+def test_documentation_discovery_ignores_weak_incidental_matches(tmp_path) -> None:
+    (tmp_path / "README.md").write_text("# API overview\n", encoding="utf-8")
+
+    candidates = discover_documentation_candidates(
+        diff="""
+diff --git a/src/api.py b/src/api.py
++@app.get("/v1/widgets")
++def list_widgets():
++    return {"items": []}
+""",
+        repository_root=tmp_path,
+        allowed_paths=("docs", "README.md"),
+    )
+
+    assert candidates == []
+
+
 def test_apply_documentation_proposal_updates_existing_file(tmp_path) -> None:
     docs = tmp_path / "docs"
     docs.mkdir()

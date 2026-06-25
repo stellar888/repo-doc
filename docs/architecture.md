@@ -51,10 +51,12 @@ no_change           read_docs
 ```
 
 Each node has a narrow contract. Conditional routing is based on parsed state. When documentation
-is needed, repo-doc merges model-selected paths with deterministic candidates discovered from
-allowed Markdown files, then reads only configured paths. Proposed edits use explicit operations
-such as create_file, append_section, and replace_section. Generated patches come from trusted
-application code, and every terminal path passes through deterministic validation.
+is needed, repo-doc reads model-selected paths, or falls back to deterministic candidates discovered
+from allowed Markdown files when the model supplies none. Discovery keeps only candidates with
+enough token/path relevance, which avoids pulling broad docs into model context because of
+incidental heading matches. repo-doc then reads only configured paths. Proposed edits use explicit
+operations such as create_file, append_section, and replace_section. Generated patches come from
+trusted application code, and every terminal path passes through deterministic validation.
 
 ## Why LangGraph?
 
