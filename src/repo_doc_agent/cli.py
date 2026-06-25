@@ -110,6 +110,39 @@ def _settings_from_inputs(
     return settings, project_config
 
 
+def _detect_allowed_doc_paths(repo_root: Path) -> list[str]:
+    candidates = ["docs", "documentation", "guides", "README.md"]
+    detected = []
+    for candidate in candidates:
+        path = repo_root / candidate
+        if path.exists():
+            detected.append(candidate)
+    return detected or ["docs", "README.md"]
+
+
+def _toml_array(values: list[str]) -> str:
+    return "[" + ", ".join(json.dumps(value) for value in values) + "]"
+
+
+def _render_project_config(
+    *,
+    allowed_doc_paths: list[str],
+    include_agents_doc: bool,
+    base_branch: str,
+) -> str:
+    defaults = Settings(openai_api_key=None)
+    lines = [
+        f"allowed_doc_paths = {_toml_array(allowed_doc_paths)}",
+        f"include_agents_doc = {str(include_agents_doc).lower()}",
+        f"base_branch = {json.dumps(base_branch)}",
+        f"max_diff_chars = {defaults.max_diff_chars}",
+        f"max_doc_chars = {defaults.max_doc_chars}",
+        f"openai_model = {json.dumps(defaults.openai_model)}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _run_analysis(
     *,
     settings: Settings,
@@ -278,6 +311,71 @@ def _print_and_write_result(
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(rendered, encoding="utf-8")
+
+
+@app.command()
+def init(
+    repo_root: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            file_okay=False,
+            help="Repository root where repo-doc.toml should be created.",
+        ),
+    ] = Path("."),
+    config_file: Annotated[
+        Path | None,
+        typer.Option(
+            dir_okay=False,
+            help="Optional config path. Defaults to --repo-root/repo-doc.toml.",
+        ),
+    ] = None,
+    allowed_doc_path: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--allowed-doc-path",
+            help="Allowed doc path. Repeat to override automatic detection.",
+        ),
+    ] = None,
+    include_agents_doc: Annotated[
+        bool,
+        typer.Option(
+            "--include-agents-doc",
+            help="Allow repo-doc to read, create, and update AGENTS.md.",
+        ),
+    ] = False,
+    base_branch: Annotated[
+        str,
+        typer.Option(help="Default base branch ref for check when --base is omitted."),
+    ] = "main",
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite an existing repo-doc.toml."),
+    ] = False,
+) -> None:
+    """Create a starter repo-doc.toml for this repository."""
+    _print_banner("init")
+    resolved_root = repo_root.resolve()
+    target = config_file or resolved_root / "repo-doc.toml"
+
+    if target.exists() and not force:
+        log_console.print(
+            f"[yellow]{target} already exists. Use --force to overwrite it.[/yellow]"
+        )
+        raise typer.Exit(code=1)
+
+    allowed_paths = allowed_doc_path or _detect_allowed_doc_paths(resolved_root)
+    rendered = _render_project_config(
+        allowed_doc_paths=allowed_paths,
+        include_agents_doc=include_agents_doc,
+        base_branch=base_branch,
+    )
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(rendered, encoding="utf-8")
+
+    log_console.print(f"[green]Created repo-doc configuration:[/green] {target}")
+    console.print(Syntax(rendered.rstrip(), "toml", word_wrap=True))
 
 
 @app.command()

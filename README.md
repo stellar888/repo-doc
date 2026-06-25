@@ -70,6 +70,7 @@ Install `repo-doc`, then run it from the repository you are changing:
 
 ```bash
 cd /path/to/your/project
+repo-doc init
 repo-doc analyse
 ```
 
@@ -148,6 +149,12 @@ openai_model = "gpt-5-mini"
 ```
 
 There is a copyable starter at `repo-doc.example.toml`.
+
+You can generate the starter instead:
+
+```bash
+repo-doc init --include-agents-doc
+```
 
 The output is JSON. The important fields are:
 

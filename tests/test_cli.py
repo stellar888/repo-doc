@@ -12,6 +12,58 @@ from repo_doc_agent.schemas import AgentResult, DocumentationProposal, Finding, 
 runner = CliRunner()
 
 
+def test_init_creates_detected_project_config(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "README.md").write_text("# Project\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["init", "--repo-root", str(tmp_path), "--include-agents-doc", "--base-branch", "main"],
+    )
+
+    assert result.exit_code == 0
+    config = (tmp_path / "repo-doc.toml").read_text(encoding="utf-8")
+    assert 'allowed_doc_paths = ["docs", "README.md"]' in config
+    assert "include_agents_doc = true" in config
+    assert 'base_branch = "main"' in config
+
+
+def test_init_refuses_to_overwrite_existing_config(tmp_path: Path) -> None:
+    config_file = tmp_path / "repo-doc.toml"
+    config_file.write_text("base_branch = \"main\"\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["init", "--repo-root", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert config_file.read_text(encoding="utf-8") == 'base_branch = "main"\n'
+
+
+def test_init_force_overwrites_with_explicit_doc_paths(tmp_path: Path) -> None:
+    config_file = tmp_path / "repo-doc.toml"
+    config_file.write_text("base_branch = \"old\"\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "init",
+            "--repo-root",
+            str(tmp_path),
+            "--allowed-doc-path",
+            "docs",
+            "--allowed-doc-path",
+            "guides",
+            "--base-branch",
+            "origin/main",
+            "--force",
+        ],
+    )
+
+    assert result.exit_code == 0
+    config = config_file.read_text(encoding="utf-8")
+    assert 'allowed_doc_paths = ["docs", "guides"]' in config
+    assert 'base_branch = "origin/main"' in config
+
+
 def test_load_diff_prefers_explicit_diff_file(tmp_path: Path) -> None:
     diff_file = tmp_path / "change.diff"
     diff_file.write_text("diff --git a/README.md b/README.md\n+hello\n", encoding="utf-8")

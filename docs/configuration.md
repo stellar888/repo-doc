@@ -2,6 +2,15 @@
 
 This file lets a repository provide sensible defaults for repo-doc without requiring every CI job or developer to pass the same flags. The file is optional.
 
+Create a starter config
+
+```bash
+repo-doc init
+repo-doc init --include-agents-doc
+```
+
+The init command detects common documentation paths such as docs, guides, documentation, and README.md. It refuses to overwrite an existing repo-doc.toml unless --force is provided.
+
 Location and discovery
 
 - Default: REPO_ROOT/repo-doc.toml
